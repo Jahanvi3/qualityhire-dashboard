@@ -796,6 +796,39 @@ async function refreshFromCloud(showToast){
     if(showToast) toast("Local Mode","No backend configured. Paste your Power Automate URL to sync across laptops.");
     return false;
   }
+  // ── Load data from a static JSON file that Power Automate publishes ──────────
+// Expected shape: { "employees": [ {...} ], "assessments": [ {...} ] }
+// Point this at a same-folder file ("data.json") or a full https URL.
+const QOH_DATA_URL = "data.json";
+
+async function loadFromJsonFile(showToast){
+  try{
+    const res = await fetch(QOH_DATA_URL, { cache: "no-store" });
+    if(!res.ok) throw new Error("HTTP " + res.status + " fetching " + QOH_DATA_URL);
+    const json = await res.json();
+
+    // Reuse the dashboard's own row mappers so column naming stays flexible
+    EMPS = (json.employees   || []).map(rowToEmp).filter(e => e.id && e.name);
+    ASMS = (json.assessments || []).map(rowToAsm).filter(a => a.employeeId);
+
+    // Persist + re-merge recruiter-added employees and POs, then re-render
+    const d = rSt() || {};
+    d.employees = EMPS; d.assessments = ASMS; d.lastUpdated = new Date().toISOString();
+    wSt(d);
+    _mergeRecruiterEmps();
+    _mergePOsIntoEMPS();
+    updateBadge();
+    updateSyncLabel();
+    if(_authUser) renderView(CV);
+
+    if(showToast) toast("Data Loaded", EMPS.length + " employees · " + ASMS.length + " assessments");
+    return true;
+  }catch(err){
+    console.warn("loadFromJsonFile failed:", err);
+    if(showToast) toast("Load Failed", err.message || ("Could not fetch " + QOH_DATA_URL));
+    return false;
+  }
+}
   const setBtns=(txt,dis)=>{document.querySelectorAll('[onclick*="refreshFromCloud"]').forEach(b=>{b.disabled=dis;b.dataset.lbl=b.dataset.lbl||b.innerHTML;b.innerHTML=txt?txt:b.dataset.lbl;});};
   try{
     setBtns("&#8635; Refreshing…",true);
