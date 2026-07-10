@@ -669,7 +669,7 @@ function importResults(){
 
    This is the ONLY thing you need to change in this file.
    ──────────────────────────────────────────────────────────────────────────── */
-const M365_FLOW_URL = "https://defaultb9d69197ce1f49079545b307af2335.e9.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/18/workflows/73e4ccabc8544a38b4775c4e8c8c022b/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=jwQpG3U_hGwlv4pYjwUX0_bx4LTn8Rm5C0GFKlYS3ig";
+const M365_FLOW_URL = "https://defaultb9d69197ce1f49079545b307af2335.e9.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/ccdb468e17a743fb8bac08c150f41f90/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=SAPPseF7bT1JP7z_C7nkQK1KTBATafHx_NGx_MIZiiQ";
 /* ════════════════════════════════════════════════════════════════════════════ */
 
 // Backwards-compatible alias (older code referenced API_URL)
@@ -799,6 +799,8 @@ async function refreshFromCloud(showToast){
       const d = rSt() || {};
       d.employees = EMPS; d.assessments = ASMS; d.lastUpdated = new Date().toISOString();
       wSt(d);
+      // Re-merge recruiter-added employees (not in Excel, stored locally)
+      _mergeRecruiterEmps();
       // Re-merge POs from the local PO store — cloud sync doesn't carry POs
       _mergePOsIntoEMPS();
       hideBanner();
@@ -1047,11 +1049,38 @@ function loadData(){
     if(!na.period) na.period = "90-Day";
     return na;
   });
-  // ── Merge POs from the persistent PO store into EMPS ──────────────────
-  // POs are saved separately so they survive M365 cloud sync overwrites.
+  // ── Merge recruiter-added employees (survive M365 sync) ───────────────
+  _mergeRecruiterEmps();
+  // ── Merge POs (survive M365 sync) ────────────────────────────────────
   _mergePOsIntoEMPS();
   updateBadge();
   updateSyncLabel();
+}
+
+// ── Recruiter Employee Store ──────────────────────────────────────────────
+// Employees added by recruiters are stored separately so they survive
+// M365 cloud sync which only knows about Excel Online employees.
+function saveRecruiterEmp(emp){
+  const d=rSt();
+  d.recruiterEmps=d.recruiterEmps||{};
+  d.recruiterEmps[emp.id]=emp;
+  wSt(d);
+}
+function removeRecruiterEmp(empId){
+  const d=rSt();
+  if(d.recruiterEmps) delete d.recruiterEmps[empId];
+  wSt(d);
+}
+function _mergeRecruiterEmps(){
+  const d=rSt();
+  const store=d.recruiterEmps||{};
+  const existingIds=new Set(EMPS.map(e=>e.id));
+  Object.values(store).forEach(emp=>{
+    if(!existingIds.has(emp.id)){
+      EMPS.push({...emp});
+      existingIds.add(emp.id);
+    }
+  });
 }
 
 // ── PO Store: persists recruiter-defined POs independently of M365 sync ──
@@ -2363,7 +2392,8 @@ function submitManualRecEntry(){
   if(!pos.length){show("Add at least one Performance Objective.");return;}
   const newEmp={id,name,department:dept,designation:desig,doj,manager:mgr,managerEmail:mgrEmail,location:loc,performanceObjectives:pos};
   const d=rSt();d.employees=d.employees||[];d.employees.push(newEmp);wSt(d);
-  // Save POs to the persistent PO store (survives M365 cloud sync)
+  // Save to persistent stores (survive M365 cloud sync)
+  saveRecruiterEmp(newEmp);
   savePOStore(id, pos);
   loadData();
   toast("Employee Added",name+" added with "+pos.length+" Performance Objective(s) ✓");
@@ -2549,7 +2579,8 @@ function confirmRecruiterUpload(){
   const idx=d.employees.findIndex(e=>e.id===emp.id);
   if(idx>=0)d.employees[idx]=emp;else d.employees.push(emp);
   wSt(d);
-  // Save POs to the persistent PO store (survives M365 cloud sync)
+  // Save to persistent stores (survive M365 cloud sync)
+  saveRecruiterEmp(emp);
   savePOStore(emp.id, emp.performanceObjectives||[]);
   loadData();_recPreviewEmp=null;
   toast("Employee Added",emp.name+" added with "+(emp.performanceObjectives||[]).length+" PO(s) ✓");
