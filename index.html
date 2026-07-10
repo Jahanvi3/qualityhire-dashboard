@@ -1081,13 +1081,21 @@ function removeRecruiterEmp(empId){
 function _mergeRecruiterEmps(){
   const d=rSt();
   const store=d.recruiterEmps||{};
-  const existingIds=new Set(EMPS.map(e=>e.id));
+  const excelIds=new Set(EMPS.map(e=>e.id));
+  let changed=false;
   Object.values(store).forEach(emp=>{
-    if(!existingIds.has(emp.id)){
+    if(excelIds.has(emp.id)){
+      // This employee is now in Excel — Excel is the source of truth.
+      // Remove the local copy so future edits from Excel always win.
+      delete store[emp.id];
+      changed=true;
+    } else {
+      // Not yet in Excel (still syncing) — show the local copy for now.
       EMPS.push({...emp});
-      existingIds.add(emp.id);
+      excelIds.add(emp.id);
     }
   });
+  if(changed){ d.recruiterEmps=store; try{wSt(d);}catch(e){} }
 }
 
 // ── PO Store: persists recruiter-defined POs independently of M365 sync ──
@@ -3076,9 +3084,19 @@ function saveEmp(existingId){
     toast("Employee Added", name + " has been added to the database");
   }
   const d=rSt(); d.employees=EMPS; wSt(d);
-  // ── Push the change up to Excel Online ──
+  // Only keep a local copy if this employee is NOT yet synced to Excel
+  // (recruiter-added, still uploading). Once in Excel, Excel is the truth.
+  const dd=rSt();
+  if(dd.recruiterEmps && dd.recruiterEmps[newEmp.id]){
+    dd.recruiterEmps[newEmp.id]=Object.assign({}, dd.recruiterEmps[newEmp.id], newEmp);
+    wSt(dd);
+  }
+  // ── Push the change up to Excel Online (visible on all laptops) ──
   if(apiConfigured()){
-    apiPost({action:"updateEmployee", row: empToRow(newEmp)}).catch(err=>{
+    apiPost({action:"updateEmployee", row: empToRow(newEmp)}).then(()=>{
+      // Pull fresh data back so the dashboard reflects Excel immediately
+      setTimeout(()=>refreshFromCloud(false), 1200);
+    }).catch(err=>{
       toast("Cloud Sync Failed", "Saved locally, but Excel Online update failed: " + (err.message||err));
     });
   }
@@ -3092,7 +3110,11 @@ function deleteEmp(empId){
   if(!confirm("Delete " + emp.name + "? This will also remove their assessment data. This cannot be undone."))return;
   EMPS = EMPS.filter(e=>e.id!==empId);
   ASMS = ASMS.filter(a=>a.employeeId!==empId);
-  const d=rSt(); d.employees=EMPS; d.assessments=ASMS; wSt(d);
+  const d=rSt(); d.employees=EMPS; d.assessments=ASMS;
+  // Also remove from local recruiter/PO stores so it doesn't come back on refresh
+  if(d.recruiterEmps) delete d.recruiterEmps[empId];
+  if(d.poStore) delete d.poStore[empId];
+  wSt(d);
   // ── Delete from Excel Online too (also removes their assessments) ──
   if(apiConfigured()){
     apiPost({action:"deleteEmployee", id: empId}).catch(err=>{
