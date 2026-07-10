@@ -669,7 +669,7 @@ function importResults(){
 
    This is the ONLY thing you need to change in this file.
    ──────────────────────────────────────────────────────────────────────────── */
-const M365_FLOW_URL = "https://defaultb9d69197ce1f49079545b307af2335.e9.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/ccdb468e17a743fb8bac08c150f41f90/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=SAPPseF7bT1JP7z_C7nkQK1KTBATafHx_NGx_MIZiiQ";
+const M365_FLOW_URL = "https://defaultb9d69197ce1f49079545b307af2335.e9.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/18/workflows/73e4ccabc8544a38b4775c4e8c8c022b/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=jwQpG3U_hGwlv4pYjwUX0_bx4LTn8Rm5C0GFKlYS3ig";
 /* ════════════════════════════════════════════════════════════════════════════ */
 
 // Backwards-compatible alias (older code referenced API_URL)
@@ -726,7 +726,7 @@ const RATING_KEYS=["achiever","technical","organising","problemSolving","roleFit
 const RATING_COL={achiever:"AchieverPattern",technical:"Technical",organising:"Organising",problemSolving:"ProblemSolving",roleFit:"RoleFit",culture:"Culture",motivation:"Motivation"};
 function _pick(r,keys){for(const k of keys){if(r[k]!==undefined&&r[k]!==null&&r[k]!=="")return r[k];}return "";}
 function rowToEmp(r){
-  return {
+  const e={
     id:String(_pick(r,["EmployeeId","employeeId","Employee ID","id"])),
     name:String(_pick(r,["Name","name","Employee Name"])),
     email:String(_pick(r,["Email","email","Email ID"])),
@@ -741,6 +741,13 @@ function rowToEmp(r){
     recruiter:String(_pick(r,["Recruiter","recruiter","Recruiter Name"])),
     hiringSource:String(_pick(r,["HiringSource","hiringSource","Hiring Source"]))
   };
+  // Performance Objectives may come back as a JSON string in a "POs" column
+  const poRaw=_pick(r,["POs","pos","PerformanceObjectives","performanceObjectives"]);
+  if(poRaw){
+    try{ const arr=typeof poRaw==="string"?JSON.parse(poRaw):poRaw; if(Array.isArray(arr)&&arr.length)e.performanceObjectives=arr; }
+    catch(_){}
+  }
+  return e;
 }
 function rowToAsm(r){
   const ratings={};
@@ -2392,10 +2399,12 @@ function submitManualRecEntry(){
   if(!pos.length){show("Add at least one Performance Objective.");return;}
   const newEmp={id,name,department:dept,designation:desig,doj,manager:mgr,managerEmail:mgrEmail,location:loc,performanceObjectives:pos};
   const d=rSt();d.employees=d.employees||[];d.employees.push(newEmp);wSt(d);
-  // Save to persistent stores (survive M365 cloud sync)
+  // Save to local stores (instant, offline-safe)
   saveRecruiterEmp(newEmp);
   savePOStore(id, pos);
   loadData();
+  // Push to Excel so it shows on everyone's dashboard
+  pushRecruiterEmpToCloud(newEmp);
   toast("Employee Added",name+" added with "+pos.length+" Performance Objective(s) ✓");
   clearManualRecEntry();renderRecruiter();
 }
@@ -2579,12 +2588,35 @@ function confirmRecruiterUpload(){
   const idx=d.employees.findIndex(e=>e.id===emp.id);
   if(idx>=0)d.employees[idx]=emp;else d.employees.push(emp);
   wSt(d);
-  // Save to persistent stores (survive M365 cloud sync)
+  // Save to local stores (instant, offline-safe)
   saveRecruiterEmp(emp);
   savePOStore(emp.id, emp.performanceObjectives||[]);
   loadData();_recPreviewEmp=null;
+  // Push to Excel so it shows on everyone's dashboard
+  pushRecruiterEmpToCloud(emp);
   toast("Employee Added",emp.name+" added with "+(emp.performanceObjectives||[]).length+" PO(s) ✓");
   renderRecruiter();
+}
+
+// ── Push a recruiter-added employee to Excel Online via Power Automate ────
+function pushRecruiterEmpToCloud(emp){
+  if(!apiConfigured()) return; // local-only mode, nothing to push
+  const row={
+    EmployeeId:emp.id||"",
+    Name:emp.name||"",
+    Department:emp.department||"",
+    Designation:emp.designation||"",
+    DOJ:emp.doj||"",
+    Manager:emp.manager||"",
+    ManagerEmail:emp.managerEmail||"",
+    Location:emp.location||"",
+    HiringSource:emp.hiringSource||"Recruiter Entry",
+    POs:JSON.stringify(emp.performanceObjectives||[])
+  };
+  api({action:"saveEmployee",employee:row})
+    .then(()=>toast("Synced to Excel",emp.name+" saved — now visible to everyone ✓"))
+    .catch(err=>{console.warn("Could not push employee to Excel:",err);
+      toast("Saved Locally",emp.name+" saved on this device. Excel sync failed — check connection.");});
 }
 
 
