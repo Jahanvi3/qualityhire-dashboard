@@ -738,7 +738,23 @@ async function apiGet(action){ return api({action}); }
    forgiving about column naming (accept Title Case OR camelCase).            */
 const RATING_KEYS=["achiever","technical","organising","problemSolving","roleFit","culture","motivation"];
 const RATING_COL={achiever:"AchieverPattern",technical:"Technical",organising:"Organising",problemSolving:"ProblemSolving",roleFit:"RoleFit",culture:"Culture",motivation:"Motivation"};
-function _pick(r,keys){for(const k of keys){if(r[k]!==undefined&&r[k]!==null&&r[k]!=="")return r[k];}return "";}
+// Normalize a header/key for forgiving comparison: lowercase, drop spaces,
+// underscores, hyphens, dots, etc. So "Employee ID", "employee_id", "EmployeeId"
+// and "EMPLOYEEID" all match. This is the difference between a colleague's Excel
+// loading correctly vs. every row being silently dropped (dashboard shows 0).
+function _norm(s){return String(s==null?"":s).toLowerCase().replace(/[^a-z0-9]/g,"");}
+function _pick(r,keys){
+  if(!r||typeof r!=="object")return "";
+  // 1) exact match first (fast, preserves prior behaviour)
+  for(const k of keys){if(r[k]!==undefined&&r[k]!==null&&r[k]!=="")return r[k];}
+  // 2) normalized match — tolerant of header spacing / casing / punctuation
+  const want=keys.map(_norm);
+  for(const rk in r){
+    if(!Object.prototype.hasOwnProperty.call(r,rk))continue;
+    if(want.indexOf(_norm(rk))!==-1){const v=r[rk];if(v!==undefined&&v!==null&&v!=="")return v;}
+  }
+  return "";
+}
 function rowToEmp(r){
   const e={
     id:String(_pick(r,["EmployeeId","employeeId","Employee ID","id"])),
@@ -814,9 +830,30 @@ async function refreshFromCloud(showToast){
   try{
     setBtns("&#8635; Refreshing…",true);
     const res = await api({action:"getData"});
-    if(res && res.ok){
-      EMPS = (res.employees||[]).map(rowToEmp).filter(e=>e.id&&e.name);
-      ASMS = (res.assessments||[]).map(rowToAsm).filter(a=>a.employeeId);
+    // Accept ok:true, OR a response with no explicit "ok" but recognizable arrays.
+    const looksOk = res && (res.ok===true || (res.ok===undefined && (Array.isArray(res)||res.employees||res.value||res.Employees||(res.body&&res.body.employees))));
+    if(looksOk){
+      // The flow can return the two tables under several possible shapes depending
+      // on how the "Response" step was built. Accept the first array we recognize
+      // so a slightly-different flow doesn't silently yield an empty dashboard.
+      const firstArr=(...c)=>{for(const x of c){if(Array.isArray(x))return x;}return [];};
+      const empRows=firstArr(res.employees,res.Employees,res.body&&res.body.employees,res.data&&res.data.employees,res.value,Array.isArray(res)?res:null);
+      const asmRows=firstArr(res.assessments,res.Assessments,res.body&&res.body.assessments,res.data&&res.data.assessments,res.assessmentsValue);
+      const mappedEmps=empRows.map(rowToEmp).filter(e=>e.id&&e.name);
+      const mappedAsms=asmRows.map(rowToAsm).filter(a=>a.employeeId);
+      // DIAGNOSTIC: the flow returned employee rows but none had a usable ID + Name.
+      // That almost always means the Excel column headers don't match. Tell the
+      // user exactly which columns arrived so it's fixable in seconds (instead of
+      // showing a mysterious "0 employees").
+      if(empRows.length && !mappedEmps.length){
+        const cols=Object.keys(empRows[0]||{}).map(escH).join(", ")||"(no columns found)";
+        showBanner("err","<strong>Excel returned "+empRows.length+" row(s), but the columns weren't recognized, so nothing could be loaded.</strong><br>Columns received: <code>"+cols+"</code><br>Your Employees table needs headers named (any casing/spacing) <code>EmployeeId</code> and <code>Name</code> — plus optionally Email, Department, Designation, DOJ, Manager, ManagerEmail, HiringSource. Rename the headers in Excel Online to match, then Refresh.");
+        if(showToast) toast("Column names not recognized", empRows.length+" row(s) received but no EmployeeId/Name column matched — see the banner.");
+        setBtns(null,false);
+        return false;
+      }
+      EMPS = mappedEmps;
+      ASMS = mappedAsms;
       const d = rSt() || {};
       d.employees = EMPS; d.assessments = ASMS; d.lastUpdated = new Date().toISOString();
       wSt(d);
@@ -844,7 +881,25 @@ async function refreshFromCloud(showToast){
   return false;
 }
 
-const SK = 'qoh_data_v1';
+const SK = 'qoh_data_v2';
+// One-time cleanup: earlier builds seeded 5 fake demo employees into storage
+// (qoh_data_v1). Those "phantom" people showed up on every colleague's laptop.
+// On first run of v2 we carry over ONLY the genuine local data (recruiter-added
+// employees, performance objectives, reminder history) and deliberately DROP the
+// cached employees/assessments so the Excel workbook becomes the single source of
+// truth. Nothing real is lost — employees/assessments reload from the cloud.
+(function _migrateSeedCleanup(){
+  try{
+    if(localStorage.getItem(SK)) return;              // v2 already initialised
+    const oldRaw=localStorage.getItem('qoh_data_v1'); if(!oldRaw) return;
+    const old=JSON.parse(oldRaw)||{};
+    const carried={};
+    if(old.recruiterEmps) carried.recruiterEmps=old.recruiterEmps;
+    if(old.poStore)       carried.poStore=old.poStore;
+    if(old.reminderLog)   carried.reminderLog=old.reminderLog;
+    localStorage.setItem(SK, JSON.stringify(carried));
+  }catch(e){}
+})();
 const TK = 'qoh_tmpl_v1';
 const TKS = 'qoh_tmpl_subject_v1';
 const TKI = 'qoh_tmpl_init_v1';
@@ -1056,7 +1111,10 @@ function loadData(){
   if((!d.employees||!d.employees.length) && window.QOH_EMBED && QOH_EMBED.employees && QOH_EMBED.employees.length){
     d=QOH_EMBED; try{wSt(d);}catch(e){}
   }
-  if((!d.employees||!d.employees.length) && QOH_DEFAULT_EMPLOYEES.length){
+  // Seed the built-in demo roster ONLY in pure local mode (no Power Automate URL).
+  // When a cloud backend is configured, the Excel workbook is the sole source of
+  // truth — never invent employees, or colleagues see people who aren't real.
+  if((!d.employees||!d.employees.length) && !apiConfigured() && QOH_DEFAULT_EMPLOYEES.length){
     d.employees=QOH_DEFAULT_EMPLOYEES.map(e=>({...e}));
     if(!d.assessments)d.assessments=[];
     d.lastUpdated=new Date().toISOString();
