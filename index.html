@@ -675,6 +675,20 @@ const M365_FLOW_URL = "https://defaultb9d69197ce1f49079545b307af2335.e9.environm
 // Backwards-compatible alias (older code referenced API_URL)
 const API_URL = M365_FLOW_URL;
 
+// ── Output-encoding helpers ───────────────────────────────────────────────────
+// Employee/manager/department values come from Excel, CSV, and recruiter uploads,
+// i.e. they are UNTRUSTED. Interpolating them raw into HTML (or into the JS of the
+// generated form) breaks the page — or the whole form — the moment a value contains
+// a quote, <, >, & or backslash (e.g. a name like O'Neil "Jr", or a pasted <tag>).
+// escH()  -> safe for HTML text / attribute values.
+// escJS() -> safe for a value baked into a JavaScript STRING literal ("...${x}...").
+function escH(v){
+  return String(v==null?"":v)
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+}
+function escJS(v){ return JSON.stringify(String(v==null?"":v)).slice(1,-1); }
+
 // Data can be BAKED into a shared copy of this file as a JS object (set by the
 // "Share" buttons). This does NOT depend on localStorage, so it survives even
 // when the file is opened by double-clicking (file://) where storage is blocked.
@@ -796,39 +810,6 @@ async function refreshFromCloud(showToast){
     if(showToast) toast("Local Mode","No backend configured. Paste your Power Automate URL to sync across laptops.");
     return false;
   }
-  // ── Load data from a static JSON file that Power Automate publishes ──────────
-// Expected shape: { "employees": [ {...} ], "assessments": [ {...} ] }
-// Point this at a same-folder file ("data.json") or a full https URL.
-const QOH_DATA_URL = "data.json";
-
-async function loadFromJsonFile(showToast){
-  try{
-    const res = await fetch(QOH_DATA_URL, { cache: "no-store" });
-    if(!res.ok) throw new Error("HTTP " + res.status + " fetching " + QOH_DATA_URL);
-    const json = await res.json();
-
-    // Reuse the dashboard's own row mappers so column naming stays flexible
-    EMPS = (json.employees   || []).map(rowToEmp).filter(e => e.id && e.name);
-    ASMS = (json.assessments || []).map(rowToAsm).filter(a => a.employeeId);
-
-    // Persist + re-merge recruiter-added employees and POs, then re-render
-    const d = rSt() || {};
-    d.employees = EMPS; d.assessments = ASMS; d.lastUpdated = new Date().toISOString();
-    wSt(d);
-    _mergeRecruiterEmps();
-    _mergePOsIntoEMPS();
-    updateBadge();
-    updateSyncLabel();
-    if(_authUser) renderView(CV);
-
-    if(showToast) toast("Data Loaded", EMPS.length + " employees · " + ASMS.length + " assessments");
-    return true;
-  }catch(err){
-    console.warn("loadFromJsonFile failed:", err);
-    if(showToast) toast("Load Failed", err.message || ("Could not fetch " + QOH_DATA_URL));
-    return false;
-  }
-}
   const setBtns=(txt,dis)=>{document.querySelectorAll('[onclick*="refreshFromCloud"]').forEach(b=>{b.disabled=dis;b.dataset.lbl=b.dataset.lbl||b.innerHTML;b.innerHTML=txt?txt:b.dataset.lbl;});};
   try{
     setBtns("&#8635; Refreshing…",true);
@@ -1153,6 +1134,12 @@ function _mergePOsIntoEMPS(){
 function empStatus(emp){
   const today=new Date(); today.setHours(0,0,0,0);
   const doj=new Date(emp.doj); doj.setHours(0,0,0,0);
+  // Missing or unparseable Date of Joining: we cannot compute a 90-day milestone,
+  // so treat it as "Upcoming"/unknown rather than silently flagging it as pending
+  // (which would also trigger reminder emails for an employee with no valid DOJ).
+  if(isNaN(doj.getTime())){
+    return {s:"Upcoming",day90:null,daysFromDOJ:0,daysTo90:0,pct:0,noDOJ:true};
+  }
   const day90=new Date(doj.getTime()+90*86400000);
   const daysFromDOJ=Math.floor((today-doj)/86400000);
   const daysFrom90=Math.floor((today-day90)/86400000);
@@ -1266,10 +1253,10 @@ function buildEmployeeForm(emp){
     roEff.forEach((po,i)=>{
       rows += `<tr class="tr-re">
         ${i===0?`<td class="td-cat tc-re" rowspan="${roEff.length}"><div class="cat-inner">Role<br>Effectiveness</div></td>`:""}
-        <td class="td-area">${po.subCategory||"Performance Objective "+(i+1)}</td>
+        <td class="td-area">${escH(po.subCategory||"Performance Objective "+(i+1))}</td>
         ${i===0?`<td class="td-wt" rowspan="${roEff.length}">40%</td>`:""}
         <td class="td-qn">n/a</td>
-        <td class="td-q">${po.objective||po.subCategory}${po._placeholder?`<div class="q-hint">Add Performance Objectives in the Recruiter Entry portal to pre-fill this section.</div>`:""}</td>
+        <td class="td-q">${escH(po.objective||po.subCategory)}${po._placeholder?`<div class="q-hint">Add Performance Objectives in the Recruiter Entry portal to pre-fill this section.</div>`:""}</td>
         <td class="td-r">${po._placeholder?"<span style='color:#94a3b8;font-size:12px'>No POs defined</span>":rWidget("re_"+i)}</td>
       </tr>`;
     });
@@ -1340,7 +1327,7 @@ function buildEmployeeForm(emp){
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>90-Day Connect — ${emp.name}</title>
+<title>90-Day Connect — ${escH(emp.name)}</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -1459,8 +1446,8 @@ td{border:1px solid #e8edf4;padding:10px 12px;vertical-align:middle}
 
 <!-- ── Employee Info ── -->
 <div class="emp-bar">
-  <div class="emp-field"><div class="emp-lbl">Employee Name</div><div class="emp-val">${emp.name}</div></div>
-  <div class="emp-field"><div class="emp-lbl">Employee ID</div><div class="emp-val">${emp.id}</div></div>
+  <div class="emp-field"><div class="emp-lbl">Employee Name</div><div class="emp-val">${escH(emp.name)}</div></div>
+  <div class="emp-field"><div class="emp-lbl">Employee ID</div><div class="emp-val">${escH(emp.id)}</div></div>
   <div class="emp-field"><div class="emp-lbl">Designation</div><div class="emp-val">${emp.designation||"—"}</div></div>
   <div class="emp-field"><div class="emp-lbl">Department</div><div class="emp-val">${emp.department||"—"}</div></div>
   <div class="day90-badge"><div class="emp-lbl">90-Day Date</div><div class="emp-val">${day90Str}</div></div>
@@ -1507,11 +1494,11 @@ td{border:1px solid #e8edf4;padding:10px 12px;vertical-align:middle}
   <div class="assessor-grid">
     <div class="af-group">
       <label class="af-lbl">Your Full Name *</label>
-      <input class="af-in" id="af_name" placeholder="e.g. Rajat Babbar" value="${emp.manager||""}">
+      <input class="af-in" id="af_name" placeholder="e.g. Rajat Babbar" value="${escH(emp.manager||"")}">
     </div>
     <div class="af-group">
       <label class="af-lbl">Your Email *</label>
-      <input class="af-in" id="af_email" type="email" placeholder="manager@altudo.co" value="${emp.managerEmail||""}">
+      <input class="af-in" id="af_email" type="email" placeholder="manager@altudo.co" value="${escH(emp.managerEmail||"")}">
     </div>
     <div class="af-group">
       <label class="af-lbl">Assessment Date *</label>
@@ -1634,8 +1621,8 @@ function submitForm(){
 
   const result={
     assessments:[{
-      employeeId:"${emp.id}",
-      employeeName:"${emp.name}",
+      employeeId:"${escJS(emp.id)}",
+      employeeName:"${escJS(emp.name)}",
       period:"90-Day",
       submittedBy:name,
       submittedByEmail:email,
@@ -1656,7 +1643,7 @@ function submitForm(){
   const blob=new Blob([JSON.stringify(result,null,2)],{type:"application/json"});
   const a=document.createElement("a");
   a.href=URL.createObjectURL(blob);
-  a.download="QOH_Result_${emp.name.replace(/\s+/g,"_")}_${emp.id}_"+date+".json";
+  a.download="QOH_Result_${escJS(String(emp.name).replace(/\s+/g,"_"))}_${escJS(emp.id)}_"+date+".json";
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
 
   document.getElementById("submitBtn").disabled=true;
@@ -2352,12 +2339,12 @@ function renderRecruiter(){
     <div class="chdr"><span class="ct">&#127919; Employees with Performance Objectives <span class="bdg b-g" style="margin-left:8px">${recEmps.length}</span></span></div>
     <div class="tw"><table><thead><tr><th>Employee</th><th>Department</th><th>Designation</th><th>90-Day Date</th><th>Manager</th><th style="text-align:center">POs</th><th>Performance Objectives</th></tr></thead>
     <tbody>${recEmps.map(e=>{const st=empStatus(e);return`<tr>
-      <td><div style="font-weight:700">${e.name}</div><div style="font-size:11px;color:#94a3b8">${e.id}</div></td>
-      <td style="color:#64748b">${e.department||"-"}</td><td style="color:#64748b">${e.designation||"-"}</td>
+      <td><div style="font-weight:700">${escH(e.name)}</div><div style="font-size:11px;color:#94a3b8">${escH(e.id)}</div></td>
+      <td style="color:#64748b">${escH(e.department||"-")}</td><td style="color:#64748b">${escH(e.designation||"-")}</td>
       <td style="white-space:nowrap;font-weight:600">${fD(st.day90)}</td>
-      <td style="color:#64748b">${e.manager||"-"}</td>
+      <td style="color:#64748b">${escH(e.manager||"-")}</td>
       <td style="text-align:center"><span class="bdg b-b">${e.performanceObjectives.length}</span></td>
-      <td style="font-size:12px;color:#475569">${e.performanceObjectives.map((p,i)=>`<strong>${i+1}.</strong> <em style="color:#94a3b8">${p.subCategory}:</em> ${p.objective}`).join("<br>")}</td>
+      <td style="font-size:12px;color:#475569">${e.performanceObjectives.map((p,i)=>`<strong>${i+1}.</strong> <em style="color:#94a3b8">${escH(p.subCategory)}:</em> ${escH(p.objective)}`).join("<br>")}</td>
     </tr>`;}).join("")}</tbody></table></div>
   </div>`:`<div class="card" style="padding:28px;text-align:center;color:#94a3b8"><div style="font-size:32px;margin-bottom:8px">&#127919;</div><div style="font-weight:600;color:#64748b;margin-bottom:4px">No Performance Objectives defined yet</div><div style="font-size:12.5px">Download the template, fill it, and upload to get started</div></div>`}`;
   buildManualRecForm();
@@ -2603,16 +2590,16 @@ function _showRecPreview(emp){
       <div style="font-weight:700;font-size:13.5px;color:#065f46">Parsed — review and confirm</div>
     </div>
     <div style="padding:18px;background:#fff">
-      ${dup?`<div style="background:#fef3c7;border:1.5px solid #fde68a;border-radius:9px;padding:10px 14px;font-size:12.5px;color:#92400e;margin-bottom:12px"><strong>&#9888; Duplicate:</strong> ID ${emp.id} already exists — will be replaced.</div>`:""}
+      ${dup?`<div style="background:#fef3c7;border:1.5px solid #fde68a;border-radius:9px;padding:10px 14px;font-size:12.5px;color:#92400e;margin-bottom:12px"><strong>&#9888; Duplicate:</strong> ID ${escH(emp.id)} already exists — will be replaced.</div>`:""}
       <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:10px">Employee Details</div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px">
         ${[["Name",emp.name],["ID",emp.id],["Department",emp.department],["Designation",emp.designation],["DOJ",emp.doj],["Manager",emp.manager],["Email",emp.managerEmail],["Location",emp.location||"—"]]
-          .map(([l,v])=>`<div style="background:#f8fafc;border-radius:9px;padding:10px"><div style="font-size:9.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:3px">${l}</div><div style="font-size:13px;font-weight:600">${v}</div></div>`).join("")}
+          .map(([l,v])=>`<div style="background:#f8fafc;border-radius:9px;padding:10px"><div style="font-size:9.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:3px">${escH(l)}</div><div style="font-size:13px;font-weight:600">${escH(v)}</div></div>`).join("")}
       </div>
       <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:10px">Performance Objectives <span class="bdg b-b" style="margin-left:6px">${emp.performanceObjectives.length} defined · Role Effectiveness 40%</span></div>
       <div class="tw" style="margin-bottom:18px">
         <table><thead><tr><th>#</th><th>Performance Objective (QUESTION)</th></tr></thead>
-        <tbody>${emp.performanceObjectives.map((p,i)=>`<tr><td style="color:#94a3b8;font-weight:800;width:40px">${i+1}</td><td style="font-weight:500;color:#334155">${p.objective}</td></tr>`).join("")}</tbody></table>
+        <tbody>${emp.performanceObjectives.map((p,i)=>`<tr><td style="color:#94a3b8;font-weight:800;width:40px">${i+1}</td><td style="font-weight:500;color:#334155">${escH(p.objective)}</td></tr>`).join("")}</tbody></table>
       </div>
       <div style="display:flex;gap:10px">
         <button class="btn btn-am" onclick="confirmRecruiterUpload()">&#10003; Confirm &amp; Add Employee</button>
@@ -2737,8 +2724,8 @@ function renderTracker(){
           <td style="padding:10px 14px;border-bottom:1px solid #f1f5f9">
             <div style="display:flex;align-items:center;gap:8px">
               <div class="av" style="width:28px;height:28px;font-size:10px">${ini(emp.name)}</div>
-              <div><div style="font-weight:600;color:#0f172a">${emp.name}</div>
-              <div style="font-size:11px;color:#94a3b8">${emp.id}</div></div>
+              <div><div style="font-weight:600;color:#0f172a">${escH(emp.name)}</div>
+              <div style="font-size:11px;color:#94a3b8">${escH(emp.id)}</div></div>
             </div></td>
           <td style="padding:10px 14px;border-bottom:1px solid #f1f5f9;color:#64748b">${emp.department||"-"}</td>
           <td style="padding:10px 14px;border-bottom:1px solid #f1f5f9;color:#64748b">${emp.designation||"-"}</td>
@@ -2937,7 +2924,7 @@ function renderPending(){
         const remCount=log.count?`<span class="bdg b-y">${log.count}&times;</span>`:'<span style="color:#cbd5e1">0</span>';
         const tglHtml=`<button class="tgl${!isPaused?" on":""}" data-tgl="${emp.id}" title="${isPaused?"Enable auto emails (admin password required)":"Disable auto emails"}"></button>`;
         tbl+=`<tr>
-          <td><div style="display:flex;align-items:center;gap:8px"><div class="av" style="width:30px;height:30px;font-size:11px">${ini(emp.name)}</div><div><div style="font-weight:600;color:#0f172a">${emp.name}</div><div style="font-size:11px;color:#94a3b8">${emp.id}</div></div></div></td>
+          <td><div style="display:flex;align-items:center;gap:8px"><div class="av" style="width:30px;height:30px;font-size:11px">${ini(emp.name)}</div><div><div style="font-weight:600;color:#0f172a">${escH(emp.name)}</div><div style="font-size:11px;color:#94a3b8">${escH(emp.id)}</div></div></div></td>
           <td style="text-align:center">${tglHtml}</td>
           <td style="white-space:nowrap;font-size:12px">${initSent}</td>
           <td style="white-space:nowrap;font-size:12.5px;color:#334155">${remSent}</td>
@@ -2972,7 +2959,7 @@ function showMsgModal(empId){
   document.getElementById("msgModalBody").innerHTML=`
     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:14px">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;font-size:12.5px">
-        <div><div style="color:#94a3b8;font-size:11px;font-weight:600;text-transform:uppercase">Employee</div><div style="font-weight:700;color:#0f172a">${emp.name}</div></div>
+        <div><div style="color:#94a3b8;font-size:11px;font-weight:600;text-transform:uppercase">Employee</div><div style="font-weight:700;color:#0f172a">${escH(emp.name)}</div></div>
         <div><div style="color:#94a3b8;font-size:11px;font-weight:600;text-transform:uppercase">90-Day Date</div><div style="font-weight:700;color:#0f172a">${fD(st.day90)}</div></div>
         <div><div style="color:#94a3b8;font-size:11px;font-weight:600;text-transform:uppercase">Manager</div><div style="font-weight:700;color:#0f172a">${emp.manager||"-"}</div></div>
         <div><div style="color:#94a3b8;font-size:11px;font-weight:600;text-transform:uppercase">Manager Email</div><div style="font-weight:700;color:#0f172a">${emp.managerEmail||"-"}</div></div>
@@ -2985,7 +2972,7 @@ function showMsgModal(empId){
     <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Attachment</div>
     <div style="display:flex;align-items:center;gap:10px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;margin-bottom:12px">
       <span style="font-size:18px">&#128206;</span>
-      <div style="flex:1;min-width:0"><div style="font-weight:700;color:#0f172a;font-size:13px;word-break:break-all">${empFormFileName(emp)}</div><div style="font-size:11.5px;color:#92400e">Prefilled &amp; locked 90-Day form for ${emp.name}</div></div>
+      <div style="flex:1;min-width:0"><div style="font-weight:700;color:#0f172a;font-size:13px;word-break:break-all">${empFormFileName(emp)}</div><div style="font-size:11.5px;color:#92400e">Prefilled &amp; locked 90-Day form for ${escH(emp.name)}</div></div>
       <button class="btn btn-am btn-sm" id="dlFormBtn2">&#8595; Download</button>
     </div>
     <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:9px 12px;font-size:12px;color:#1e40af;margin-bottom:12px"><strong>&#9432; Email links can\u2019t carry attachments.</strong> Click <strong>Send via Power Automate</strong> to email the manager with the form attached automatically, or use <strong>Open in Email</strong> and attach the downloaded form yourself.</div>
@@ -3046,7 +3033,7 @@ function openEmpModal(empId){
   const ov = document.getElementById("empModalOverlay");
   const title = document.getElementById("empModalTitle");
   const body = document.getElementById("empModalBody");
-  title.textContent = isEdit ? "Edit Employee — " + emp.name : "Add New Employee";
+  title.textContent = isEdit ? "Edit Employee — " + emp.name : "Add New Employee";  // textContent is auto-escaped by the DOM
 
   const fields = [
     ["id","Employee ID *","text",emp?.id||""],
@@ -3068,8 +3055,8 @@ function openEmpModal(empId){
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
       ${fields.map(([id,lbl,type,val])=>`
       <div>
-        <label style="display:block;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">${lbl}</label>
-        <input type="${type}" id="ef_${id}" value="${val}" placeholder="${lbl.replace(" *","")}"
+        <label style="display:block;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">${escH(lbl)}</label>
+        <input type="${type}" id="ef_${id}" value="${escH(val)}" placeholder="${escH(lbl.replace(" *",""))}"
           style="width:100%;padding:8px 11px;border-radius:8px;border:1.5px solid #e2e8f0;font-size:13px;font-family:inherit;color:#0f172a;outline:none"
           onfocus="this.style.borderColor='#f59e0b'" onblur="this.style.borderColor='#e2e8f0'">
       </div>`).join("")}
@@ -3164,7 +3151,7 @@ function deleteEmp(empId){
 function renderEmps(){
   const depts=[...new Set(EMPS.map(e=>e.department))];
   const fil=EMPS.filter(e=>(!ES||e.name.toLowerCase().includes(ES.toLowerCase())||e.id.toLowerCase().includes(ES.toLowerCase()))&&(!ED||e.department===ED));
-  const empDeptOpts = depts.map(d=>"<option value=\""+d+"\""+( ED===d?" selected":"")+">"+d+"</option>").join("");
+  const empDeptOpts = depts.map(d=>"<option value=\""+escH(d)+"\""+( ED===d?" selected":"")+">"+escH(d)+"</option>").join("");
   const main=document.getElementById("main");
   main.innerHTML=`
   <div class="ph">
@@ -3184,7 +3171,7 @@ function renderEmps(){
   </div>
   <div style="display:flex;gap:10px;margin-bottom:14px">
     <div class="fw" style="flex:1"><div class="fic"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
-    <input class="fi" style="width:100%" placeholder="Search by name or ID..." value="${ES}" id="empSrch"></div>
+    <input class="fi" style="width:100%" placeholder="Search by name or ID..." value="${escH(ES)}" id="empSrch"></div>
     <select class="fsel" style="width:165px" id="empDeptSel">
       <option value="">All Departments</option>
       ${empDeptOpts}
@@ -3206,14 +3193,14 @@ function renderEmps(){
       const st=empStatus(e);
       const tr=document.createElement("tr");
       tr.innerHTML=`
-        <td><div style="display:flex;align-items:center;gap:8px"><div class="av" style="width:30px;height:30px;font-size:11px">${ini(e.name)}</div><div><div style="font-weight:600;color:#0f172a">${e.name}</div><div style="font-size:11px;color:#94a3b8">${e.email||""}</div></div></div></td>
-        <td style="font-family:monospace;font-size:12px;color:#64748b">${e.id}</td>
-        <td style="color:#64748b">${e.department}</td>
-        <td style="color:#64748b">${e.designation}</td>
+        <td><div style="display:flex;align-items:center;gap:8px"><div class="av" style="width:30px;height:30px;font-size:11px">${ini(e.name)}</div><div><div style="font-weight:600;color:#0f172a">${escH(e.name)}</div><div style="font-size:11px;color:#94a3b8">${escH(e.email||"")}</div></div></div></td>
+        <td style="font-family:monospace;font-size:12px;color:#64748b">${escH(e.id)}</td>
+        <td style="color:#64748b">${escH(e.department)}</td>
+        <td style="color:#64748b">${escH(e.designation)}</td>
         <td style="color:#64748b;white-space:nowrap">${fD(e.doj)}</td>
         <td style="white-space:nowrap"><strong>${fD(st.day90)}</strong></td>
-        <td style="color:#64748b">${e.manager||"-"}</td>
-        <td style="color:#64748b">${e.hiringSource||"-"}</td>
+        <td style="color:#64748b">${escH(e.manager||"-")}</td>
+        <td style="color:#64748b">${escH(e.hiringSource||"-")}</td>
         <td>${stBadge(st.s)}</td>
         <td style="text-align:center">
           <div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap">
@@ -3326,6 +3313,12 @@ function renderReports(){
     div.appendChild(btn);ec.appendChild(div);
   });
 }
+// True only when an assessment carries real per-factor ratings (the 7 QOH factors).
+// Assessments captured through the generated 90-Day form store section scores +
+// an overall recommendation instead, so their 7 factor cells must show "—" rather
+// than a misleading 0.00.
+function _hasFactorData(a){ return !!(a && a.ratings && Object.values(a.ratings).some(v=>parseFloat(v)>0)); }
+
 function expA(){
   const fa=filt();
   if(!fa.length){toast("Nothing to export","No assessments match the current filter.");return;}
@@ -3335,6 +3328,7 @@ function expA(){
   const rows=fa.map(a=>{
     const e=EMPS.find(x=>x.id===a.employeeId)||{};
     const d90e=e&&e.id?day90Of(e):null;
+    const hasFactors=_hasFactorData(a);
     const r={
       "Submitted Date":a.submittedDate||"",
       "90-Day Date":d90e?fD(d90e):"-",
@@ -3350,26 +3344,28 @@ function expA(){
       "Submitted By":a.submittedBy||"",
       "Submitted By (Email)":a.submittedByEmail||""
     };
-    // Every individual question rating (1-5), full question labels
-    Object.entries(CLF).forEach(([k,l])=>{r[l]=(a.ratings&&a.ratings[k])||0;});
+    // Every individual question rating (1-5). Show "—" when the factor wasn't captured
+    // (e.g. results imported from the section-based 90-Day form) instead of a fake 0.
+    Object.entries(CLF).forEach(([k,l])=>{r[l]=hasFactors?((a.ratings&&a.ratings[k])||0):"—";});
     // Category sub-scores
-    r["Basic Competencies (avg)"]=catAvg(a,CG.basic);
-    r["Core Competencies (avg)"]=catAvg(a,CG.core);
+    r["Basic Competencies (avg)"]=hasFactors?catAvg(a,CG.basic):"—";
+    r["Core Competencies (avg)"]=hasFactors?catAvg(a,CG.core):"—";
     // Final score + rating
     r["QOH Score"]=typeof a.finalScore==="number"?parseFloat(a.finalScore.toFixed(2)):(parseFloat(a.finalScore)||"");
     r["Rating"]=a.rating||(a.finalScore?rI(a.finalScore).l:"");
+    r["Overall Recommendation"]=pickF(a,["overallRecommendation","OverallRecommendation","recommendation"]);
     // Written form sections
     r["Key Strengths"]=pickF(a,["strengths","Strengths","keyStrengths","strength"]);
     r["Development Areas"]=pickF(a,["improvements","Improvements","Development Areas","developmentAreas","areasOfImprovement"]);
     r["Support Needed"]=pickF(a,["support","Support","supportNeeded","supportRequired"]);
-    r["Factor Comments"]=pickF(a,["factorComments","FactorComments"]);
+    r["Manager Comments"]=pickF(a,["comments","Comments","factorComments","FactorComments"]);
     r["Submitted At"]=a.submittedAt||"";
     return r;
   });
   const headers=Object.keys(rows[0]);
   const ws2=XLSX.utils.json_to_sheet(rows,{header:headers});
   // Readable column widths (wide for the written sections)
-  const wide=["Key Strengths","Development Areas","Support Needed","Factor Comments"];
+  const wide=["Key Strengths","Development Areas","Support Needed","Manager Comments","Overall Recommendation"];
   const med=["Employee Name","Designation","Department","Submitted By","Submitted By (Email)","Date of Joining","Submitted At","Manager"];
   const qLabels=Object.values(CLF);
   ws2["!cols"]=headers.map(h=>wide.includes(h)?{wch:50}:med.includes(h)?{wch:20}:qLabels.includes(h)?{wch:16}:{wch:13});
@@ -3377,7 +3373,7 @@ function expA(){
 }
 function expMo(){const rows=MN.map((m,i)=>{const mo=i+1;const ma=ASMS.filter(a=>{const e=EMPS.find(x=>x.id===a.employeeId);const d90=e?day90Of(e):null;return d90&&d90.getMonth()+1===mo&&d90.getFullYear()>=2026;});const s=ma.length?avg(ma.map(a=>a.finalScore)):null;return{Month:m,Quarter:"Q"+Math.ceil(mo/3),Assessments:ma.length,"Avg QOH":s?parseFloat(s.toFixed(2)):"N/A",Rating:s?rI(s).l:"N/A"};}).filter(Boolean);const ws2=XLSX.utils.json_to_sheet(rows);const wb2=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb2,ws2,"Monthly");XLSX.writeFile(wb2,"monthly_report.xlsx");}
 function expQ(){const rows=[1,2,3,4].map(q=>{const qa=ASMS.filter(a=>{const e=EMPS.find(x=>x.id===a.employeeId);const d90=e?day90Of(e):null;if(!d90)return false;if(d90.getFullYear()<2026)return false;return Math.ceil((d90.getMonth()+1)/3)===q;});const s=qa.length?avg(qa.map(a=>a.finalScore)):null;return{Quarter:"Q"+q,Months:["Jan-Mar","Apr-Jun","Jul-Sep","Oct-Dec"][q-1],Assessments:qa.length,"Avg QOH":s?parseFloat(s.toFixed(2)):"N/A",Rating:s?rI(s).l:"N/A"};});const ws2=XLSX.utils.json_to_sheet(rows);const wb2=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb2,ws2,"Quarters");XLSX.writeFile(wb2,"quarter_report.xlsx");}
-function expEmpStatus(){const pickF=(a,keys)=>{for(const k of keys){if(a&&a[k]!==undefined&&a[k]!==null&&a[k]!=="")return a[k];}return"";};const rows=EMPS.map(e=>{const st=empStatus(e);const a=st.asm;const base={"Employee ID":e.id,Name:e.name,Department:e.department,Designation:e.designation,"Date of Joining":e.doj,"90-Day Date":fD(st.day90),Manager:e.manager||"-","QOH Status":st.s,"Days from DOJ":st.daysFromDOJ,"Pending Since (Days)":st.s==="Pending Assessment"||st.s==="Overdue"?st.daysFrom90:"-","Assessment Date":a?a.submittedDate:"Not completed","Submitted By":a?(a.submittedBy||""):"-"};Object.entries(CLF).forEach(([k,l])=>{base[l]=a&&a.ratings?(a.ratings[k]||0):"-";});base["QOH Score"]=a?(typeof a.finalScore==="number"?parseFloat(a.finalScore.toFixed(2)):a.finalScore):"-";base["Rating"]=a?(a.rating||rI(a.finalScore).l):"-";base["Key Strengths"]=a?pickF(a,["strengths","Strengths","keyStrengths"]):"";base["Development Areas"]=a?pickF(a,["improvements","Improvements","Development Areas","developmentAreas"]):"";base["Support Needed"]=a?pickF(a,["support","Support","supportNeeded"]):"";return base;});const headers=Object.keys(rows[0]);const ws2=XLSX.utils.json_to_sheet(rows,{header:headers});const wide=["Key Strengths","Development Areas","Support Needed","Factor Comments"];const qLabels=Object.values(CLF);ws2["!cols"]=headers.map(h=>wide.includes(h)?{wch:50}:qLabels.includes(h)?{wch:16}:{wch:16});const wb2=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb2,ws2,"Employee Status");XLSX.writeFile(wb2,"employee_qoh_status.xlsx");}
+function expEmpStatus(){const pickF=(a,keys)=>{for(const k of keys){if(a&&a[k]!==undefined&&a[k]!==null&&a[k]!=="")return a[k];}return"";};const rows=EMPS.map(e=>{const st=empStatus(e);const a=st.asm;const base={"Employee ID":e.id,Name:e.name,Department:e.department,Designation:e.designation,"Date of Joining":e.doj,"90-Day Date":fD(st.day90),Manager:e.manager||"-","QOH Status":st.s,"Days from DOJ":st.daysFromDOJ,"Pending Since (Days)":st.s==="Pending Assessment"||st.s==="Overdue"?st.daysFrom90:"-","Assessment Date":a?a.submittedDate:"Not completed","Submitted By":a?(a.submittedBy||""):"-"};Object.entries(CLF).forEach(([k,l])=>{base[l]=a?(_hasFactorData(a)?(a.ratings[k]||0):"—"):"-";});base["QOH Score"]=a?(typeof a.finalScore==="number"?parseFloat(a.finalScore.toFixed(2)):a.finalScore):"-";base["Rating"]=a?(a.rating||rI(a.finalScore).l):"-";base["Overall Recommendation"]=a?pickF(a,["overallRecommendation","OverallRecommendation","recommendation"]):"";base["Key Strengths"]=a?pickF(a,["strengths","Strengths","keyStrengths"]):"";base["Development Areas"]=a?pickF(a,["improvements","Improvements","Development Areas","developmentAreas"]):"";base["Support Needed"]=a?pickF(a,["support","Support","supportNeeded"]):"";base["Manager Comments"]=a?pickF(a,["comments","Comments","factorComments","FactorComments"]):"";return base;});const headers=Object.keys(rows[0]);const ws2=XLSX.utils.json_to_sheet(rows,{header:headers});const wide=["Key Strengths","Development Areas","Support Needed","Manager Comments","Overall Recommendation"];const qLabels=Object.values(CLF);ws2["!cols"]=headers.map(h=>wide.includes(h)?{wch:50}:qLabels.includes(h)?{wch:16}:{wch:16});const wb2=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb2,ws2,"Employee Status");XLSX.writeFile(wb2,"employee_qoh_status.xlsx");}
 
 </script>
 
