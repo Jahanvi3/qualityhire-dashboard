@@ -689,6 +689,26 @@ function escH(v){
 }
 function escJS(v){ return JSON.stringify(String(v==null?"":v)).slice(1,-1); }
 
+// Convert whatever the Excel/CSV date looks like into the yyyy-mm-dd that an
+// <input type="date"> requires. Without this, a DOJ like "01/05/2026" or an Excel
+// serial number shows BLANK in the editor and the "required field" check then
+// blocks Save. Returns "" if it can't be parsed.
+function _toDateInput(v){
+  if(v==null||v==="") return "";
+  const s=String(v).trim();
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;                       // already ISO
+  let m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);                    // ISO datetime
+  if(m) return m[1]+"-"+("0"+m[2]).slice(-2)+"-"+("0"+m[3]).slice(-2);
+  m=s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);           // dd/mm/yyyy or dd-mm-yyyy
+  if(m){ let dd=+m[1], mm=+m[2]; if(dd>12&&mm<=12){/*ok*/} else if(mm>12&&dd<=12){[dd,mm]=[mm,dd];} // best-effort day/month
+         return m[3]+"-"+("0"+mm).slice(-2)+"-"+("0"+dd).slice(-2); }
+  if(/^\d+(\.\d+)?$/.test(s)){                                      // Excel serial date number
+    const n=parseFloat(s); if(n>0&&n<60000){ const d=new Date(Date.UTC(1899,11,30)+n*86400000);
+      if(!isNaN(d)) return d.toISOString().slice(0,10); }
+  }
+  const d=new Date(s); return isNaN(d)?"":d.toISOString().slice(0,10);  // last resort
+}
+
 // Data can be BAKED into a shared copy of this file as a JS object (set by the
 // "Share" buttons). This does NOT depend on localStorage, so it survives even
 // when the file is opened by double-clicking (file://) where storage is blocked.
@@ -854,15 +874,18 @@ async function refreshFromCloud(showToast){
       }
       EMPS = mappedEmps;
       ASMS = mappedAsms;
-      const d = rSt() || {};
-      d.employees = EMPS; d.assessments = ASMS; d.lastUpdated = new Date().toISOString();
-      wSt(d);
       // Re-merge recruiter-added employees (not in Excel, stored locally)
       _mergeRecruiterEmps();
       // Re-merge POs from the local PO store — cloud sync doesn't carry POs
       _mergePOsIntoEMPS();
-      hideBanner();
+      // Re-apply the user's local edits/deletes so a flow that isn't persisting to
+      // Excel can't silently revert them; confirmed changes are cleared automatically.
+      _applyPendingOps();
+      const d = rSt() || {};
+      d.employees = EMPS; d.assessments = ASMS; d.lastUpdated = new Date().toISOString();
+      wSt(d);
       updateBadge();
+      if(pendingCount()>0){ _pendingBanner(); } else { hideBanner(); }
       renderView(CV);
       if(showToast) toast("Data Refreshed", EMPS.length + " employees · " + ASMS.length + " assessments loaded from Excel Online");
       setBtns(null,false);
@@ -1132,6 +1155,8 @@ function loadData(){
   _mergeRecruiterEmps();
   // ── Merge POs (survive M365 sync) ────────────────────────────────────
   _mergePOsIntoEMPS();
+  // ── Re-apply any local edits/deletes not yet confirmed in Excel ───────
+  _applyPendingOps();
   updateBadge();
   updateSyncLabel();
 }
@@ -1186,6 +1211,45 @@ function _mergePOsIntoEMPS(){
       e.performanceObjectives=[];
     }
   });
+}
+
+// ── Pending local changes (edit / delete) ────────────────────────────────────
+// The Excel workbook is the source of truth and the dashboard re-reads it after
+// every change. If the Power Automate "Update a row" / "Delete a row" step isn't
+// actually writing to Excel, that refresh would REVERT the user's edit or bring a
+// deleted person back. To prevent silent data loss we remember each change locally
+// and re-apply it on top of every cloud pull until Excel confirms it took effect.
+function rPending(){const d=rSt();const p=d.pendingOps||{};p.updates=p.updates||{};p.deletes=p.deletes||{};return p;}
+function wPending(p){const d=rSt();d.pendingOps={updates:p.updates||{},deletes:p.deletes||{}};wSt(d);}
+function addPendingUpdate(emp){const p=rPending();delete p.deletes[emp.id];p.updates[emp.id]={...emp};wPending(p);}
+function addPendingDelete(id){const p=rPending();delete p.updates[id];p.deletes[id]=true;wPending(p);}
+function clearPending(id){const p=rPending();delete p.updates[id];delete p.deletes[id];wPending(p);}
+function pendingCount(){const p=rPending();return Object.keys(p.updates).length+Object.keys(p.deletes).length;}
+function _empMatches(a,b){
+  const sig=e=>[e.name,e.department,e.designation,e.doj,e.manager,e.email,e.managerEmail,e.hiringSource]
+    .map(x=>String(x==null?"":x).trim().toLowerCase()).join("|");
+  return sig(a)===sig(b);
+}
+// Overlay pending changes onto the freshly-loaded EMPS and reconcile confirmations.
+function _applyPendingOps(){
+  const p=rPending(); let changed=false;
+  Object.keys(p.deletes).forEach(id=>{
+    if(EMPS.some(e=>e.id===id)){ EMPS=EMPS.filter(e=>e.id!==id); }   // still in Excel → keep it hidden
+    else { delete p.deletes[id]; changed=true; }                     // gone from Excel → delete confirmed
+  });
+  Object.keys(p.updates).forEach(id=>{
+    const cloudE=EMPS.find(e=>e.id===id), local=p.updates[id];
+    if(!cloudE){ EMPS.push({...local}); return; }                    // not in Excel yet → show local copy
+    if(_empMatches(cloudE, local)){ delete p.updates[id]; changed=true; }  // Excel matches → confirmed
+    else { Object.assign(cloudE, local); }                           // Excel stale → keep the local edit visible
+  });
+  if(changed) wPending(p);
+}
+function _pendingBanner(){
+  const n=pendingCount();
+  if(n>0){
+    showBanner("warn","<strong>"+n+" change"+(n!==1?"s are":" is")+" saved on your dashboard but not yet confirmed in Excel Online.</strong> If your edits or deletions keep reverting, open your Power Automate flow and make sure the <em>Update a row</em> step (Case 5) and <em>Delete a row</em> step (Case 6) have their <code>Key Column</code> set to <code>EmployeeId</code> and Key Value taken from the request. Your changes will stay visible here in the meantime.");
+  }
 }
 
 // ── 90-Day Status ────────────────────────────────────────────────────────
@@ -3099,7 +3163,7 @@ function openEmpModal(empId){
     ["email","Email","email",emp?.email||""],
     ["department","Department *","text",emp?.department||""],
     ["designation","Designation *","text",emp?.designation||""],
-    ["doj","Date of Joining *","date",emp?.doj||""],
+    ["doj","Date of Joining *","date",_toDateInput(emp?.doj)],
     ["manager","Reporting Manager","text",emp?.manager||""],
     ["managerEmail","Manager Email","email",emp?.managerEmail||""],
     ["mentor","Mentor","text",emp?.mentor||""],
@@ -3154,13 +3218,20 @@ function saveEmp(existingId){
     location:get("location"), employmentType:get("employmentType")||"Full-time",
     recruiter:get("recruiter"), hiringSource:get("hiringSource")
   };
+  let finalEmp;
   if(existingId){
-    EMPS = EMPS.map(e=>e.id===existingId ? {...e,...newEmp,id:existingId} : e);
+    const prev=EMPS.find(e=>e.id===existingId)||{};
+    finalEmp={...prev,...newEmp,id:existingId};
+    EMPS = EMPS.map(e=>e.id===existingId ? finalEmp : e);
     toast("Employee Updated", name + " has been updated successfully");
   } else {
+    finalEmp=newEmp;
     EMPS.push(newEmp);
     toast("Employee Added", name + " has been added to the database");
   }
+  // Remember this change locally so a cloud refresh can't revert it before Excel
+  // (via Power Automate) has actually saved it.
+  addPendingUpdate(finalEmp);
   const d=rSt(); d.employees=EMPS; wSt(d);
   // Only keep a local copy if this employee is NOT yet synced to Excel
   // (recruiter-added, still uploading). Once in Excel, Excel is the truth.
@@ -3193,9 +3264,14 @@ function deleteEmp(empId){
   if(d.recruiterEmps) delete d.recruiterEmps[empId];
   if(d.poStore) delete d.poStore[empId];
   wSt(d);
+  // Remember the deletion so a cloud refresh can't resurrect the employee before
+  // Excel (via Power Automate) has actually removed the row.
+  addPendingDelete(empId);
   // ── Delete from Excel Online too (also removes their assessments) ──
   if(apiConfigured()){
-    apiPost({action:"deleteEmployee", id: empId}).catch(err=>{
+    apiPost({action:"deleteEmployee", id: empId}).then(()=>{
+      setTimeout(()=>refreshFromCloud(false), 1200);   // re-pull to confirm the row is gone
+    }).catch(err=>{
       toast("Cloud Sync Failed", "Deleted locally, but Excel Online update failed: " + (err.message||err));
     });
   }
