@@ -1670,8 +1670,8 @@ td{border:1px solid #e8edf4;padding:10px 12px;vertical-align:middle}
   <button class="submit-btn" onclick="submitForm()" id="submitBtn">
     &#10003; Submit 90-Day Assessment
   </button>
-  <div style="text-align:center;margin-top:12px;font-size:11.5px;color:#94a3b8">
-    This will download a <strong>.json</strong> result file — send it to HR to import into the dashboard
+  <div style="text-align:center;margin-top:12px;font-size:11.5px;color:#94a3b8" id="submitHint">
+    On submit, your assessment is sent to HR automatically &mdash; their dashboard updates on its own.
   </div>
 </div>
 
@@ -1732,7 +1732,7 @@ function updateScore(){
 function getVal(key){const h=document.getElementById("rv_"+key);return h&&h.value?parseFloat(h.value):null;}
 function getValStr(key){const h=document.getElementById("rv_"+key);return h?h.value:"";}
 
-function submitForm(){
+async function submitForm(){
   const errEl=document.getElementById("errMsg");
   errEl.style.display="none";
   const errors=[];
@@ -1756,36 +1756,64 @@ function submitForm(){
   // Calculate scores
   const reScore=avg(RE_KEYS)||0, gpScore=avg(GP_KEYS)||0, psScore=avg(PS_KEYS)||0, ccScore=avg(CC_KEYS)||0;
   const finalScore=Math.round((reScore*0.4+gpScore*0.2+psScore*0.2+ccScore*0.2)*100)/100;
+  const comments=document.getElementById("af_comments").value.trim();
 
-  const result={
-    assessments:[{
-      employeeId:"${escJS(emp.id)}",
-      employeeName:"${escJS(emp.name)}",
-      period:"90-Day",
-      submittedBy:name,
-      submittedByEmail:email,
-      submittedDate:date,
-      finalScore:finalScore,
-      overallRecommendation:recEl.value,
-      comments:document.getElementById("af_comments").value.trim(),
-      sections:{
-        roleEffectiveness:{score:Math.round(reScore*100)/100, ratings:RE_KEYS.map(getVal)},
-        growthPotential:{score:Math.round(gpScore*100)/100, ratings:GP_KEYS.map(getVal)},
-        problemSolving:{score:Math.round(psScore*100)/100, ratings:PS_KEYS.map(getVal)},
-        culture:{score:Math.round(ccScore*100)/100, ratings:CC_KEYS.map(getVal)}
-      }
-    }]
+  // Row shape MUST match what the dashboard's "Import Results" pushes to the flow
+  // via action:"saveAssessments" — so the SAME flow branch saves it to Excel and
+  // every HR dashboard picks it up automatically.
+  const row={
+    EmployeeId:"${escJS(emp.id)}",
+    EmployeeName:"${escJS(emp.name)}",
+    Period:"90-Day",
+    FinalScore:finalScore,
+    SubmittedBy:name,
+    SubmittedByEmail:email,
+    SubmittedDate:date,
+    OverallRecommendation:recEl.value,
+    Comments:comments
   };
+  // Section-based JSON (used ONLY as a fallback if the backend can't be reached)
+  const result={ assessments:[{
+    employeeId:"${escJS(emp.id)}", employeeName:"${escJS(emp.name)}", period:"90-Day",
+    submittedBy:name, submittedByEmail:email, submittedDate:date,
+    finalScore:finalScore, overallRecommendation:recEl.value, comments:comments,
+    sections:{
+      roleEffectiveness:{score:Math.round(reScore*100)/100, ratings:RE_KEYS.map(getVal)},
+      growthPotential:{score:Math.round(gpScore*100)/100, ratings:GP_KEYS.map(getVal)},
+      problemSolving:{score:Math.round(psScore*100)/100, ratings:PS_KEYS.map(getVal)},
+      culture:{score:Math.round(ccScore*100)/100, ratings:CC_KEYS.map(getVal)}
+    }
+  }]};
 
-  // Download JSON
+  const btn=document.getElementById("submitBtn");
+  const hint=document.getElementById("submitHint");
+  btn.disabled=true; btn.textContent="Submitting\u2026";
+
+  const FLOW_URL=${JSON.stringify(M365_FLOW_URL)};
+  const configured = typeof FLOW_URL==="string" && FLOW_URL.indexOf("http")===0 && FLOW_URL.indexOf("PASTE_")!==0;
+
+  if(configured){
+    try{
+      const r=await fetch(FLOW_URL,{method:"POST",redirect:"follow",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({action:"saveAssessments",assessments:[row]})});
+      if(!r.ok) throw new Error("HTTP "+r.status);
+      // Success — the shared Excel is updated; HR dashboards refresh on their own.
+      btn.textContent="\u2713 Submitted";
+      if(hint){ hint.style.color="#059669"; hint.innerHTML="<strong>Assessment submitted.</strong> HR has received it \u2014 their dashboard updates automatically. You can close this window."; }
+      return;
+    }catch(err){
+      // Couldn't reach the backend — fall back to a download so nothing is lost.
+      console.warn("Auto-submit failed, using download fallback:",err);
+    }
+  }
+
+  // Fallback: download JSON for manual import by HR
   const blob=new Blob([JSON.stringify(result,null,2)],{type:"application/json"});
   const a=document.createElement("a");
   a.href=URL.createObjectURL(blob);
   a.download="QOH_Result_${escJS(String(emp.name).replace(/\s+/g,"_"))}_${escJS(emp.id)}_"+date+".json";
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
-
-  document.getElementById("submitBtn").disabled=true;
-  document.getElementById("submitBtn").textContent="✓ Submitted — send the downloaded .json to HR";
+  btn.textContent="\u2713 Submitted";
+  if(hint){ hint.style.color="#b45309"; hint.innerHTML="<strong>Couldn\u2019t reach HR\u2019s system, so a .json file was downloaded instead.</strong> Please email it to HR to import."; }
 }
 <\/script>
 </body>
