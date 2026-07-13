@@ -1365,7 +1365,13 @@ function buildEmployeeForm(emp){
     {v:2, label:"Partially Meets Expectations", short:"Partially Meets",col:"#334155"},
     {v:1, label:"Under Performance",            short:"Under",          col:"#334155"}
   ];
-  const RECS = ["Exceeded Hiring Expectations","Met Hiring Expectations","Partially Met Hiring Expectations","Did Not Meet Hiring Expectations"];
+  const RECS = [
+    {v:1, label:"Did Not Meet Hiring Expectations"},
+    {v:2, label:"Partially Met Hiring Expectations"},
+    {v:3, label:"Met Hiring Expectations"},
+    {v:4, label:"Exceeded Hiring Expectations"},
+    {v:5, label:"Significantly Exceeded Hiring Expectations"}
+  ];
 
   // ── Rating widget: 5 styled buttons ──────────────────────────────────────
   function rWidget(key){
@@ -1377,14 +1383,13 @@ function buildEmployeeForm(emp){
     </div>`;
   }
 
-  // ── Recommendation widget: 4 radio buttons ────────────────────────────────
+  // ── Recommendation widget: 5-point dropdown ───────────────────────────────
   function recWidget(){
-    return `<div class="rec-w">${RECS.map((r,i)=>`
-      <label class="rec-opt">
-        <input type="radio" name="overall_rec" value="${r}" onchange="pickRec(this)">
-        <span class="rec-lbl">${r}</span>
-      </label>`).join("")}
-      <div class="rl" id="rl_overall_rec"></div>
+    return `<div class="rw">
+      <select class="rsel" name="overall_rec" id="overall_rec" onchange="pickRec(this)">
+        <option value="">Select recommendation…</option>
+        ${RECS.map(r=>`<option value="${r.label}">${r.v} (${r.label})</option>`).join("")}
+      </select>
     </div>`;
   }
 
@@ -1602,7 +1607,7 @@ td{border:1px solid #e8edf4;padding:10px 12px;vertical-align:middle}
 </div>
 
 <!-- ── Part 1: Role Effectiveness (added by recruiter) ── -->
-<div class="part-title"><span class="part-num">1</span> Role Effectiveness <span class="part-tag">Added by Recruiter</span></div>
+<div class="part-title"><span class="part-num">1</span> Role Effectiveness</div>
 <div class="tbl-wrap">
   <table>
     <thead>
@@ -1698,11 +1703,7 @@ function pickR(btn){
   updateScore();
 }
 
-function pickRec(radio){
-  const lbl=document.getElementById("rl_overall_rec");
-  if(lbl){lbl.textContent="Selected: "+radio.value;lbl.style.color="#0d4f3c";}
-  document.querySelectorAll(".rec-opt .rec-lbl").forEach(l=>{l.style.fontWeight="";l.style.color="";});
-  if(radio.checked){const l=radio.nextElementSibling;if(l){l.style.fontWeight="700";l.style.color="#0d4f3c";}}
+function pickRec(sel){
   updateScore();
 }
 
@@ -1740,8 +1741,9 @@ async function submitForm(){
   const missing=ALL_SCORED.filter(k=>!getValStr(k));
   if(missing.length) errors.push("Please rate all sections before submitting ("+missing.length+" remaining).");
 
-  const recEl=document.querySelector("input[name='overall_rec']:checked");
-  if(!recEl) errors.push("Please select an Overall Recommendation.");
+  const recSel=document.getElementById("overall_rec");
+  const recVal=recSel?recSel.value:"";
+  if(!recVal) errors.push("Please select an Overall Recommendation.");
 
   const nameEl=document.getElementById("af_name"), emailEl=document.getElementById("af_email"), dateEl=document.getElementById("af_date");
   const name=nameEl?nameEl.value.trim():"";
@@ -1766,14 +1768,14 @@ async function submitForm(){
     SubmittedBy:name,
     SubmittedByEmail:email,
     SubmittedDate:date,
-    OverallRecommendation:recEl.value,
+    OverallRecommendation:recVal,
     Comments:comments
   };
   // Section-based JSON (used ONLY as a fallback if the backend can't be reached)
   const result={ assessments:[{
     employeeId:"${escJS(emp.id)}", employeeName:"${escJS(emp.name)}", period:"90-Day",
     submittedBy:name, submittedByEmail:email, submittedDate:date,
-    finalScore:finalScore, overallRecommendation:recEl.value, comments:comments,
+    finalScore:finalScore, overallRecommendation:recVal, comments:comments,
     sections:{
       roleEffectiveness:{score:Math.round(reScore*100)/100, ratings:RE_KEYS.map(getVal)},
       growthPotential:{score:Math.round(gpScore*100)/100, ratings:GP_KEYS.map(getVal)},
@@ -2464,7 +2466,7 @@ const QOH_RATINGS=[
   {v:2,label:"Partially Meets Expectations",col:"#f59e0b"},
   {v:1,label:"Under Performance",           col:"#dc2626"}
 ];
-const QOH_RECOMMENDATION=["Exceeded Hiring Expectations","Met Hiring Expectations","Partially Met Hiring Expectations","Did Not Meet Hiring Expectations"];
+const QOH_RECOMMENDATION=["Did Not Meet Hiring Expectations","Partially Met Hiring Expectations","Met Hiring Expectations","Exceeded Hiring Expectations","Significantly Exceeded Hiring Expectations"];
 const QOH_FRAMEWORK=[
   {category:"Role Effectiveness",weight:40,recruiterDefined:true,areas:[
     {name:"Performance Objectives (Role Specific)",question:"Rate achievement against each PO set at joining.",recruiterPOs:true}
