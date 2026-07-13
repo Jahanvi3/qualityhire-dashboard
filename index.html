@@ -1899,8 +1899,17 @@ async function postReminders(items){
     return;
   }
   setPendingStatus("load",'<span>&#8635;</span> <div style="flex:1">Sending '+items.length+' reminder'+(items.length!==1?"s":"")+' with the 90-Day form attached\u2026</div>');
+  // For a single reminder, ALSO expose its fields at the top level of the payload
+  // so the Power Automate "Send an email" step can bind directly to
+  // triggerBody()?['subject'] / ['bodyHtml'] / ['managerEmail'] / ['attachmentName']
+  // / ['attachmentContentBytes'] — no array indexing needed. The reminders[] array
+  // is kept for bulk sends.
+  const _top = items.length===1 ? items[0] : {};
   try{
-    const res=await apiReminder({action:"sendReminders",generatedAt:new Date().toISOString(),count:items.length,reminders:items});
+    const res=await apiReminder(Object.assign(
+      {action:"sendReminders",generatedAt:new Date().toISOString(),count:items.length,reminders:items},
+      _top
+    ));
     if(res && res.ok){
       const sent=(res.sent!==undefined?res.sent:items.length);
       items.forEach(it=>{ bumpRemLog(it.employeeId); if(it.emailType==="initial") markInitialSent(it.employeeId); });
@@ -1933,23 +1942,14 @@ let AUTO_LAST_RUN=0;
 async function runAutoEmailScheduler(force){ return; /* auto-send disabled */ }
 function sendReminderToEmp(empId, kind){
   const emp=EMPS.find(e=>e.id===empId); if(!emp)return;
-  const k=kind||emailKindFor(emp);
-  // Compose the email from the DASHBOARD content (clean subject + body) and
-  // download the prefilled form to attach — no Power Automate JSON email.
-  emailAndAttach(emp,k);
-  bumpRemLog(emp.id);
-  if(k==="initial") markInitialSent(emp.id);
-  setPendingStatus("ok",'<span>&#10003;</span> <div style="flex:1"><strong>Email draft opened for '+escH(emp.manager||emp.managerEmail||emp.name)+'</strong> with the dashboard message, and the prefilled 90-Day form was downloaded &mdash; attach it and send.</div>');
-  try{ renderPending(); }catch(e){}
+  // Auto-send via Power Automate (email + attached form). The payload carries a
+  // clean subject/body/bodyHtml so the flow emails proper content, not JSON.
+  postReminders([buildReminderItem(emp, kind||emailKindFor(emp))]);
 }
 function sendRemindersAll(){
   const list=pendingList();
   if(!list.length){toast("All clear","No pending assessments right now.");return;}
-  // Bulk: browsers can't open many email drafts at once, so download every
-  // prefilled form, then HR opens each manager's reminder (dashboard email) from
-  // the list to send. Still no Power Automate JSON email.
-  generateFormsAllPending();
-  setPendingStatus("ok",'<span>&#10003;</span> <div style="flex:1"><strong>'+list.length+' prefilled form'+(list.length!==1?"s":"")+' downloaded.</strong> Click the <strong>Reminder</strong> button on each row to open that manager\u2019s email (prefilled with the dashboard message), then attach their form and send.</div>');
+  postReminders(list.map(buildReminderItem));
 }
 function sendFormsAllPending(){ sendRemindersAll(); }
 function generateFormsAllPending(){
@@ -3139,14 +3139,16 @@ function showMsgModal(empId){
       <div style="flex:1;min-width:0"><div style="font-weight:700;color:#0f172a;font-size:13px;word-break:break-all">${empFormFileName(emp)}</div><div style="font-size:11.5px;color:#92400e">Prefilled &amp; locked 90-Day form for ${escH(emp.name)}</div></div>
       <button class="btn btn-am btn-sm" id="dlFormBtn2">&#8595; Download</button>
     </div>
-    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:9px 12px;font-size:12px;color:#1e40af;margin-bottom:12px"><strong>&#9432; Email links can\u2019t carry attachments.</strong> Click <strong>Open Email + Download Form</strong> to open the manager\u2019s email prefilled with the message above, then attach the form that downloads.</div>
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:9px 12px;font-size:12px;color:#1e40af;margin-bottom:12px"><strong>&#9432; Send via Power Automate</strong> emails the manager automatically with the form attached. <strong>Open Email + Download Form</strong> is a manual fallback (opens your email prefilled with this message; attach the downloaded form yourself).</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-am" id="sendPaBtn">&#9993; Open Email + Download Form</button>
+      <button class="btn btn-am" id="sendPaBtn">&#9993; Send via Power Automate</button>
+      <button class="btn btn-blue" id="emailAttachBtn">&#9993; Open Email + Download Form</button>
       <button class="btn btn-sec" id="copyMsgBtn">&#128203; Copy Message</button>
     </div>`;
   document.getElementById("msgOverlay").classList.add("open");
   document.getElementById("sendPaBtn").addEventListener("click",()=>{closeMsgModal();sendReminderToEmp(emp.id,kind);});
   document.getElementById("dlFormBtn2").addEventListener("click",()=>downloadEmployeeForm(emp.id));
+  document.getElementById("emailAttachBtn").addEventListener("click",()=>{emailAndAttach(emp,kind);toast("Form downloaded","Attach it to the email draft that just opened.");});
   document.getElementById("copyMsgBtn").addEventListener("click",()=>{
     const full="Subject: "+subject+"\n\n"+msg;
     navigator.clipboard.writeText(full).then(()=>toast("Copied!","Subject + message copied to clipboard")).catch(()=>{
