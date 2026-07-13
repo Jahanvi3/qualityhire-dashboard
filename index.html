@@ -1794,7 +1794,9 @@ async function submitForm(){
 
   if(configured){
     try{
-      const r=await fetch(FLOW_URL,{method:"POST",redirect:"follow",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({action:"saveAssessments",assessments:[row]})});
+      // Send BOTH the assessments[] array AND the same fields at the top level,
+      // so it works whether the flow loops "assessments" or reads top-level tokens.
+      const r=await fetch(FLOW_URL,{method:"POST",redirect:"follow",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(Object.assign({action:"saveAssessments",assessments:[row]},row))});
       if(!r.ok) throw new Error("HTTP "+r.status);
       // Success — the shared Excel is updated; HR dashboards refresh on their own.
       btn.textContent="\u2713 Submitted";
