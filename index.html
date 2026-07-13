@@ -1359,11 +1359,11 @@ function buildEmployeeForm(emp){
 
   // ── Rating scale (1-5) ───────────────────────────────────────────────────
   const RATINGS = [
-    {v:5, label:"Outstanding Performance",     short:"Outstanding",    col:"#059669"},
-    {v:4, label:"Exceeds Expectations",         short:"Exceeds",        col:"#2563eb"},
-    {v:3, label:"Meets Expectations",           short:"Meets",          col:"#d97706"},
-    {v:2, label:"Partially Meets Expectations", short:"Partially Meets",col:"#f59e0b"},
-    {v:1, label:"Under Performance",            short:"Under",          col:"#dc2626"}
+    {v:5, label:"Outstanding Performance",     short:"Outstanding",    col:"#334155"},
+    {v:4, label:"Exceeds Expectations",         short:"Exceeds",        col:"#334155"},
+    {v:3, label:"Meets Expectations",           short:"Meets",          col:"#334155"},
+    {v:2, label:"Partially Meets Expectations", short:"Partially Meets",col:"#334155"},
+    {v:1, label:"Under Performance",            short:"Under",          col:"#334155"}
   ];
   const RECS = ["Exceeded Hiring Expectations","Met Hiring Expectations","Partially Met Hiring Expectations","Did Not Meet Hiring Expectations"];
 
@@ -1398,7 +1398,6 @@ function buildEmployeeForm(emp){
       rows += `<tr class="tr-re">
         ${i===0?`<td class="td-cat tc-re" rowspan="${roEff.length}"><div class="cat-inner">Role<br>Effectiveness</div></td>`:""}
         <td class="td-area">${escH(po.subCategory||"Performance Objective "+(i+1))}</td>
-        ${i===0?`<td class="td-wt" rowspan="${roEff.length}">40%</td>`:""}
         <td class="td-q">${escH(po.objective||po.subCategory)}${po._placeholder?`<div class="q-hint">Add Performance Objectives in the Recruiter Entry portal to pre-fill this section.</div>`:""}</td>
         <td class="td-r">${po._placeholder?"<span style='color:#94a3b8;font-size:12px'>No POs defined</span>":rWidget("re_"+i)}</td>
       </tr>`;
@@ -1412,7 +1411,6 @@ function buildEmployeeForm(emp){
       rows += `<tr class="tr-gp">
         ${i===0?`<td class="td-cat tc-gp" rowspan="2"><div class="cat-inner">Growth Potential<br>&amp; Learning Ability</div></td>`:""}
         <td class="td-area">${area}</td>
-        ${i===0?`<td class="td-wt" rowspan="2">20%</td>`:""}
         <td class="td-q">${q}</td>
         <td class="td-r">${rWidget(key)}</td>
       </tr>`;
@@ -1426,7 +1424,6 @@ function buildEmployeeForm(emp){
       rows += `<tr class="tr-ps">
         ${i===0?`<td class="td-cat tc-ps" rowspan="2"><div class="cat-inner">Problem Solving<br>&amp; Ownership</div></td>`:""}
         <td class="td-area">${area}</td>
-        ${i===0?`<td class="td-wt" rowspan="2">20%</td>`:""}
         <td class="td-q">${q}</td>
         <td class="td-r">${rWidget(key)}</td>
       </tr>`;
@@ -1440,7 +1437,6 @@ function buildEmployeeForm(emp){
       rows += `<tr class="tr-cc">
         ${i===0?`<td class="td-cat tc-cc" rowspan="2"><div class="cat-inner">Culture &amp;<br>Collaboration</div></td>`:""}
         <td class="td-area">${area}</td>
-        ${i===0?`<td class="td-wt" rowspan="2">20%</td>`:""}
         <td class="td-q">${q}</td>
         <td class="td-r">${rWidget(key)}</td>
       </tr>`;
@@ -1450,7 +1446,6 @@ function buildEmployeeForm(emp){
     rows += `<tr class="tr-vs">
       <td class="td-cat tc-vs"><div class="cat-inner">Validation<br>(Not Scored)</div></td>
       <td class="td-area">Overall Recommendation</td>
-      <td class="td-wt">—</td>
       <td class="td-q">Considering the Altudian's performance, potential, and fit so far, how would you assess the overall hiring outcome?</td>
       <td class="td-r">${recWidget()}</td>
     </tr>`;
@@ -1533,7 +1528,7 @@ td{border:1px solid #e8edf4;padding:10px 12px;vertical-align:middle}
 /* Rating widget */
 .rw{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
 .rb{width:34px;height:34px;border-radius:8px;border:2px solid #e2e8f0;background:#fff;font-size:13px;font-weight:800;cursor:pointer;color:#64748b;transition:all .15s;font-family:'Inter',system-ui,sans-serif;flex-shrink:0}
-.rb:hover{border-color:#f59e0b;color:#b45309;background:#fffbeb;transform:scale(1.06)}
+.rb:hover{border-color:#94a3b8;color:#334155;background:#f1f5f9;transform:scale(1.06)}
 .rb.sel{color:#fff;border-color:transparent;box-shadow:0 2px 8px rgba(0,0,0,.2)}
 .rl{font-size:10.5px;font-weight:600;color:#64748b;margin-top:4px;width:100%;min-height:14px;font-style:italic}
 
@@ -1600,7 +1595,7 @@ td{border:1px solid #e8edf4;padding:10px 12px;vertical-align:middle}
 <!-- ── Rating Scale Reference ── -->
 <div class="scale-card">
   <span class="scale-title">Rating Scale</span>
-  ${[{v:1,l:"Under Performance",c:"#dc2626"},{v:2,l:"Partially Meets",c:"#f59e0b"},{v:3,l:"Meets Expectations",c:"#d97706"},{v:4,l:"Exceeds Expectations",c:"#2563eb"},{v:5,l:"Outstanding Performance",c:"#059669"}]
+  ${[{v:1,l:"Under Performance",c:"#334155"},{v:2,l:"Partially Meets",c:"#334155"},{v:3,l:"Meets Expectations",c:"#334155"},{v:4,l:"Exceeds Expectations",c:"#334155"},{v:5,l:"Outstanding Performance",c:"#334155"}]
     .map(r=>`<div class="scale-item"><div class="scale-num" style="background:${r.c}">${r.v}</div><div class="scale-text">${r.l}</div></div>`).join('<span class="scale-sep">·</span>')}
 </div>
 
@@ -1609,13 +1604,8 @@ td{border:1px solid #e8edf4;padding:10px 12px;vertical-align:middle}
   <table>
     <thead>
       <tr>
-        <th colspan="3" style="background:#0d4f3c;color:#fff;font-size:13px;font-weight:800;padding:10px 14px;letter-spacing:.02em;text-transform:none;border:none">90-Day Connect</th>
-        <th colspan="2" style="background:#1a6b50;color:rgba(255,255,255,.9);font-size:10.5px;font-weight:700;padding:10px 14px;text-transform:uppercase;letter-spacing:.07em;border:none;text-align:left">90-Day Assessment Question</th>
-      </tr>
-      <tr>
         <th>Category</th>
         <th>Assessment Area</th>
-        <th>Weight</th>
         <th style="min-width:260px">Question</th>
         <th style="min-width:200px">Rating (1–5)</th>
       </tr>
@@ -1628,21 +1618,9 @@ td{border:1px solid #e8edf4;padding:10px 12px;vertical-align:middle}
 
 <!-- ── Assessor Details + Submit ── -->
 <div class="assessor">
-  <div class="assessor-title">&#128203; Assessor Details &amp; Submission</div>
-  <div class="assessor-grid">
-    <div class="af-group">
-      <label class="af-lbl">Your Full Name *</label>
-      <input class="af-in" id="af_name" placeholder="e.g. Rajat Babbar" value="${escH(emp.manager||"")}">
-    </div>
-    <div class="af-group">
-      <label class="af-lbl">Your Email *</label>
-      <input class="af-in" id="af_email" type="email" placeholder="manager@altudo.co" value="${escH(emp.managerEmail||"")}">
-    </div>
-    <div class="af-group">
-      <label class="af-lbl">Assessment Date *</label>
-      <input class="af-in" id="af_date" type="date" value="${new Date().toISOString().slice(0,10)}">
-    </div>
-  </div>
+  <input type="hidden" id="af_name" value="${escH(emp.manager||"")}">
+  <input type="hidden" id="af_email" value="${escH(emp.managerEmail||"")}">
+  <input type="hidden" id="af_date" value="${new Date().toISOString().slice(0,10)}">
   <div class="af-group" style="margin-bottom:18px">
     <label class="af-lbl">Additional Comments / Observations (optional)</label>
     <textarea class="af-in" id="af_comments" rows="3" placeholder="Any specific examples, strengths, or areas for development…" style="resize:vertical;line-height:1.6"></textarea>
@@ -1650,16 +1628,16 @@ td{border:1px solid #e8edf4;padding:10px 12px;vertical-align:middle}
 
   <!-- Live score preview -->
   <div class="score-preview" id="scorePreview">
-    <div class="sp-item"><div class="sp-label">Role Effectiveness</div><div class="sp-val" id="sp_re">—</div><div class="sp-sub">40% weight</div></div>
+    <div class="sp-item"><div class="sp-label">Role Effectiveness</div><div class="sp-val" id="sp_re">—</div></div>
     <div class="sp-divider"></div>
-    <div class="sp-item"><div class="sp-label">Growth Potential</div><div class="sp-val" id="sp_gp">—</div><div class="sp-sub">20% weight</div></div>
+    <div class="sp-item"><div class="sp-label">Growth Potential</div><div class="sp-val" id="sp_gp">—</div></div>
     <div class="sp-divider"></div>
-    <div class="sp-item"><div class="sp-label">Problem Solving</div><div class="sp-val" id="sp_ps">—</div><div class="sp-sub">20% weight</div></div>
+    <div class="sp-item"><div class="sp-label">Problem Solving</div><div class="sp-val" id="sp_ps">—</div></div>
     <div class="sp-divider"></div>
-    <div class="sp-item"><div class="sp-label">Culture &amp; Collab</div><div class="sp-val" id="sp_cc">—</div><div class="sp-sub">20% weight</div></div>
+    <div class="sp-item"><div class="sp-label">Culture &amp; Collab</div><div class="sp-val" id="sp_cc">—</div></div>
     <div class="sp-divider"></div>
     <div class="sp-item" style="flex:1.5">
-      <div class="sp-label">QOH Index (Weighted)</div>
+      <div class="sp-label">QOH Index</div>
       <div class="sp-val" id="sp_final" style="font-size:28px;color:#0d4f3c">—</div>
       <div class="sp-sub" id="sp_rating">Rate each section to see score</div>
     </div>
@@ -1686,7 +1664,7 @@ const CC_KEYS  = ["cc_0","cc_1"];
 const ALL_SCORED = [...RE_KEYS,...GP_KEYS,...PS_KEYS,...CC_KEYS];
 
 const RATING_LABELS = {5:"Outstanding Performance",4:"Exceeds Expectations",3:"Meets Expectations",2:"Partially Meets Expectations",1:"Under Performance"};
-const RATING_COLS   = {5:"#059669",4:"#2563eb",3:"#d97706",2:"#f59e0b",1:"#dc2626"};
+const RATING_COLS   = {5:"#334155",4:"#334155",3:"#334155",2:"#334155",1:"#334155"};
 
 function pickR(btn){
   const key=btn.dataset.key, val=parseInt(btn.dataset.val), col=btn.dataset.col;
@@ -1744,12 +1722,10 @@ async function submitForm(){
   const recEl=document.querySelector("input[name='overall_rec']:checked");
   if(!recEl) errors.push("Please select an Overall Recommendation.");
 
-  const name=document.getElementById("af_name").value.trim();
-  const email=document.getElementById("af_email").value.trim();
-  const date=document.getElementById("af_date").value;
-  if(!name) errors.push("Please enter your name.");
-  if(!email) errors.push("Please enter your email.");
-  if(!date) errors.push("Please enter the assessment date.");
+  const nameEl=document.getElementById("af_name"), emailEl=document.getElementById("af_email"), dateEl=document.getElementById("af_date");
+  const name=nameEl?nameEl.value.trim():"";
+  const email=emailEl?emailEl.value.trim():"";
+  const date=(dateEl&&dateEl.value)?dateEl.value:new Date().toISOString().slice(0,10);
 
   if(errors.length){ errEl.innerHTML=errors.map(e=>"• "+e).join("<br>"); errEl.style.display="block"; return; }
 
