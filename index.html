@@ -1370,7 +1370,7 @@ function buildEmployeeForm(emp){
   // ── Rating widget: 5 styled buttons ──────────────────────────────────────
   function rWidget(key){
     return `<div class="rw" id="rw_${key}">
-      ${RATINGS.map(r=>`<button type="button" class="rb" data-key="${key}" data-val="${r.v}" data-col="${r.col}"
+      ${[...RATINGS].reverse().map(r=>`<button type="button" class="rb" data-key="${key}" data-val="${r.v}" data-col="${r.col}"
         title="${r.v} — ${r.label}" onclick="pickR(this)">${r.v}</button>`).join("")}
       <input type="hidden" name="${key}" id="rv_${key}" value="">
       <div class="rl" id="rl_${key}"></div>
@@ -1399,7 +1399,6 @@ function buildEmployeeForm(emp){
         ${i===0?`<td class="td-cat tc-re" rowspan="${roEff.length}"><div class="cat-inner">Role<br>Effectiveness</div></td>`:""}
         <td class="td-area">${escH(po.subCategory||"Performance Objective "+(i+1))}</td>
         ${i===0?`<td class="td-wt" rowspan="${roEff.length}">40%</td>`:""}
-        <td class="td-qn">n/a</td>
         <td class="td-q">${escH(po.objective||po.subCategory)}${po._placeholder?`<div class="q-hint">Add Performance Objectives in the Recruiter Entry portal to pre-fill this section.</div>`:""}</td>
         <td class="td-r">${po._placeholder?"<span style='color:#94a3b8;font-size:12px'>No POs defined</span>":rWidget("re_"+i)}</td>
       </tr>`;
@@ -1414,7 +1413,6 @@ function buildEmployeeForm(emp){
         ${i===0?`<td class="td-cat tc-gp" rowspan="2"><div class="cat-inner">Growth Potential<br>&amp; Learning Ability</div></td>`:""}
         <td class="td-area">${area}</td>
         ${i===0?`<td class="td-wt" rowspan="2">20%</td>`:""}
-        <td class="td-qn">Q${i+1}</td>
         <td class="td-q">${q}</td>
         <td class="td-r">${rWidget(key)}</td>
       </tr>`;
@@ -1429,7 +1427,6 @@ function buildEmployeeForm(emp){
         ${i===0?`<td class="td-cat tc-ps" rowspan="2"><div class="cat-inner">Problem Solving<br>&amp; Ownership</div></td>`:""}
         <td class="td-area">${area}</td>
         ${i===0?`<td class="td-wt" rowspan="2">20%</td>`:""}
-        <td class="td-qn">Q${i+1}</td>
         <td class="td-q">${q}</td>
         <td class="td-r">${rWidget(key)}</td>
       </tr>`;
@@ -1444,7 +1441,6 @@ function buildEmployeeForm(emp){
         ${i===0?`<td class="td-cat tc-cc" rowspan="2"><div class="cat-inner">Culture &amp;<br>Collaboration</div></td>`:""}
         <td class="td-area">${area}</td>
         ${i===0?`<td class="td-wt" rowspan="2">20%</td>`:""}
-        <td class="td-qn">Q${i+1}</td>
         <td class="td-q">${q}</td>
         <td class="td-r">${rWidget(key)}</td>
       </tr>`;
@@ -1455,7 +1451,6 @@ function buildEmployeeForm(emp){
       <td class="td-cat tc-vs"><div class="cat-inner">Validation<br>(Not Scored)</div></td>
       <td class="td-area">Overall Recommendation</td>
       <td class="td-wt">—</td>
-      <td class="td-qn">Q1</td>
       <td class="td-q">Considering the Altudian's performance, potential, and fit so far, how would you assess the overall hiring outcome?</td>
       <td class="td-r">${recWidget()}</td>
     </tr>`;
@@ -1605,7 +1600,7 @@ td{border:1px solid #e8edf4;padding:10px 12px;vertical-align:middle}
 <!-- ── Rating Scale Reference ── -->
 <div class="scale-card">
   <span class="scale-title">Rating Scale</span>
-  ${[{v:5,l:"Outstanding Performance",c:"#059669"},{v:4,l:"Exceeds Expectations",c:"#2563eb"},{v:3,l:"Meets Expectations",c:"#d97706"},{v:2,l:"Partially Meets",c:"#f59e0b"},{v:1,l:"Under Performance",c:"#dc2626"}]
+  ${[{v:1,l:"Under Performance",c:"#dc2626"},{v:2,l:"Partially Meets",c:"#f59e0b"},{v:3,l:"Meets Expectations",c:"#d97706"},{v:4,l:"Exceeds Expectations",c:"#2563eb"},{v:5,l:"Outstanding Performance",c:"#059669"}]
     .map(r=>`<div class="scale-item"><div class="scale-num" style="background:${r.c}">${r.v}</div><div class="scale-text">${r.l}</div></div>`).join('<span class="scale-sep">·</span>')}
 </div>
 
@@ -1614,14 +1609,13 @@ td{border:1px solid #e8edf4;padding:10px 12px;vertical-align:middle}
   <table>
     <thead>
       <tr>
-        <th colspan="4" style="background:#0d4f3c;color:#fff;font-size:13px;font-weight:800;padding:10px 14px;letter-spacing:.02em;text-transform:none;border:none">90-Day Connect</th>
+        <th colspan="3" style="background:#0d4f3c;color:#fff;font-size:13px;font-weight:800;padding:10px 14px;letter-spacing:.02em;text-transform:none;border:none">90-Day Connect</th>
         <th colspan="2" style="background:#1a6b50;color:rgba(255,255,255,.9);font-size:10.5px;font-weight:700;padding:10px 14px;text-transform:uppercase;letter-spacing:.07em;border:none;text-align:left">90-Day Assessment Question</th>
       </tr>
       <tr>
         <th>Category</th>
         <th>Assessment Area</th>
         <th>Weight</th>
-        <th>Q#</th>
         <th style="min-width:260px">Question</th>
         <th style="min-width:200px">Rating (1–5)</th>
       </tr>
