@@ -1810,10 +1810,23 @@ function downloadEmployeeForm(empId){
 // Power Automate flow used for the Excel sync. Each reminder carries the email
 // subject + body AND the employee-specific assessment form as a base64
 // attachment, so the flow can send the form WITH the email.
+// Convert the plain-text email body (with \n line breaks) into a clean, safe
+// HTML block so Outlook renders proper paragraphs/line breaks instead of showing
+// literal "\n". Bind the flow's "Send an email" Body to `bodyHtml` for this.
+function msgToHtml(text){
+  const safe=escH(text||"");
+  const html=safe
+    .replace(/\r\n/g,"\n")
+    .replace(/\n{2,}/g,"</p><p style=\"margin:0 0 12px\">")  // blank line = new paragraph
+    .replace(/\n/g,"<br>");                                    // single line break
+  return '<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#1f2937;line-height:1.6">'
+    + '<p style="margin:0 0 12px">' + html + '</p></div>';
+}
 function buildReminderItem(emp,kind){
   const st=empStatus(emp);
   kind=kind||emailKindFor(emp);
   const formHtml=buildEmployeeForm(emp);
+  const bodyText=genMsg(emp,st,kind);
   return {
     employeeId:emp.id,
     employeeName:emp.name,
@@ -1827,9 +1840,10 @@ function buildReminderItem(emp,kind){
     status:st.s,
     emailType:kind,                                  // "initial" (first-time) or "reminder"
     subject:genSubject(emp,st,kind),
-    body:genMsg(emp,st,kind),
+    body:bodyText,                                   // plain-text version (real \n newlines)
+    bodyHtml:msgToHtml(bodyText),                    // HTML version → bind the email Body to THIS
     attachmentName:empFormFileName(emp),
-    attachmentContentBytes:b64EncodeUtf8(formHtml)   // base64 of the prefilled form
+    attachmentContentBytes:b64EncodeUtf8(formHtml)   // base64 of the prefilled form (use base64ToBinary() in the flow)
   };
 }
 function setPendingStatus(kind,msg){
