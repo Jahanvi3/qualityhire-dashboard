@@ -1370,10 +1370,10 @@ function buildEmployeeForm(emp){
   // ── Rating widget: 5 styled buttons ──────────────────────────────────────
   function rWidget(key){
     return `<div class="rw" id="rw_${key}">
-      ${[...RATINGS].reverse().map(r=>`<button type="button" class="rb" data-key="${key}" data-val="${r.v}" data-col="${r.col}"
-        title="${r.v} — ${r.label}" onclick="pickR(this)">${r.v}</button>`).join("")}
-      <input type="hidden" name="${key}" id="rv_${key}" value="">
-      <div class="rl" id="rl_${key}"></div>
+      <select class="rsel" name="${key}" id="rv_${key}" onchange="updateScore()">
+        <option value="">Select rating…</option>
+        ${[...RATINGS].reverse().map(r=>`<option value="${r.v}">${r.v} (${r.label})</option>`).join("")}
+      </select>
     </div>`;
   }
 
@@ -1389,10 +1389,9 @@ function buildEmployeeForm(emp){
   }
 
   // ── Build Category rows ───────────────────────────────────────────────────
-  function catRows(){
+  // Part 1: Role Effectiveness (recruiter-defined Performance Objectives)
+  function roleEffRows(){
     let rows = "";
-
-    // ── Role Effectiveness (40%) — recruiter-defined POs ──────────────────
     const roEff = pos.length ? pos : [{subCategory:"Performance Objectives (Role Specific)", objective:"Performance objectives given by recruiter", _placeholder:true}];
     roEff.forEach((po,i)=>{
       rows += `<tr class="tr-re">
@@ -1402,6 +1401,12 @@ function buildEmployeeForm(emp){
         <td class="td-r">${po._placeholder?"<span style='color:#94a3b8;font-size:12px'>No POs defined</span>":rWidget("re_"+i)}</td>
       </tr>`;
     });
+    return rows;
+  }
+
+  // Part 2: Growth Potential, Problem Solving, Culture & Collaboration, Validation
+  function restRows(){
+    let rows = "";
 
     // ── Growth Potential & Learning Ability (20%) ──────────────────────────
     [
@@ -1492,7 +1497,10 @@ body{font-family:'Inter',system-ui,sans-serif;background:#f0f4f8;color:#0f172a;f
 .scale-sep{color:#e2e8f0;font-size:16px}
 
 /* Assessment table */
-.tbl-wrap{background:#fff;border:1px solid #e2e8f0;border-top:none;overflow:hidden;border-radius:0 0 16px 16px}
+.part-title{font-size:14px;font-weight:800;color:#0d4f3c;margin:24px 0 10px;display:flex;align-items:center;gap:9px;padding:0 2px}
+.part-num{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:7px;background:#0d4f3c;color:#fff;font-size:12.5px;font-weight:800;flex-shrink:0}
+.part-tag{font-size:10.5px;font-weight:700;color:#64748b;background:#f1f5f9;border:1px solid #e2e8f0;padding:2px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:.05em}
+.tbl-wrap{background:#fff;border:1px solid #e2e8f0;overflow:hidden;border-radius:12px}
 table{width:100%;border-collapse:collapse}
 .th-connect{background:#0d4f3c;color:#fff;text-align:center;font-size:13px;font-weight:800;padding:10px 14px;letter-spacing:.02em}
 .th-sub{background:#1a6b50;color:rgba(255,255,255,.9);font-size:10px;font-weight:700;padding:8px 14px;text-transform:uppercase;letter-spacing:.08em}
@@ -1527,6 +1535,8 @@ td{border:1px solid #e8edf4;padding:10px 12px;vertical-align:middle}
 
 /* Rating widget */
 .rw{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.rsel{width:100%;padding:8px 11px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:12.5px;font-weight:600;font-family:'Inter',system-ui,sans-serif;color:#334155;background:#fff;cursor:pointer;outline:none;transition:border .15s}
+.rsel:focus{border-color:#334155;box-shadow:0 0 0 3px rgba(51,65,85,.08)}
 .rb{width:34px;height:34px;border-radius:8px;border:2px solid #e2e8f0;background:#fff;font-size:13px;font-weight:800;cursor:pointer;color:#64748b;transition:all .15s;font-family:'Inter',system-ui,sans-serif;flex-shrink:0}
 .rb:hover{border-color:#94a3b8;color:#334155;background:#f1f5f9;transform:scale(1.06)}
 .rb.sel{color:#fff;border-color:transparent;box-shadow:0 2px 8px rgba(0,0,0,.2)}
@@ -1591,14 +1601,8 @@ td{border:1px solid #e8edf4;padding:10px 12px;vertical-align:middle}
   <div class="emp-field"><div class="emp-lbl">Assessment Period</div><div class="emp-val">90-Day Connect</div></div>
 </div>
 
-<!-- ── Rating Scale Reference ── -->
-<div class="scale-card">
-  <span class="scale-title">Rating Scale</span>
-  ${[{v:1,l:"Under Performance",c:"#334155"},{v:2,l:"Partially Meets",c:"#334155"},{v:3,l:"Meets Expectations",c:"#334155"},{v:4,l:"Exceeds Expectations",c:"#334155"},{v:5,l:"Outstanding Performance",c:"#334155"}]
-    .map(r=>`<div class="scale-item"><div class="scale-num" style="background:${r.c}">${r.v}</div><div class="scale-text">${r.l}</div></div>`).join('<span class="scale-sep">·</span>')}
-</div>
-
-<!-- ── Assessment Table ── -->
+<!-- ── Part 1: Role Effectiveness (added by recruiter) ── -->
+<div class="part-title"><span class="part-num">1</span> Role Effectiveness <span class="part-tag">Added by Recruiter</span></div>
 <div class="tbl-wrap">
   <table>
     <thead>
@@ -1606,11 +1610,29 @@ td{border:1px solid #e8edf4;padding:10px 12px;vertical-align:middle}
         <th>Category</th>
         <th>Assessment Area</th>
         <th style="min-width:260px">Question</th>
-        <th style="min-width:200px">Rating (1–5)</th>
+        <th style="min-width:200px">Rating</th>
       </tr>
     </thead>
     <tbody>
-      ${catRows()}
+      ${roleEffRows()}
+    </tbody>
+  </table>
+</div>
+
+<!-- ── Part 2: Manager Assessment ── -->
+<div class="part-title"><span class="part-num">2</span> Manager Assessment</div>
+<div class="tbl-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Category</th>
+        <th>Assessment Area</th>
+        <th style="min-width:260px">Question</th>
+        <th style="min-width:200px">Rating</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${restRows()}
     </tbody>
   </table>
 </div>
