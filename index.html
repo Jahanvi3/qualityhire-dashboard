@@ -1924,10 +1924,11 @@ async function postReminders(items){
     // the manual path so HR is never blocked, and explain clearly.
     const why=(err.message||"Network error");
     if(single){
-      const emp=EMPS.find(e=>e.id===items[0].employeeId);
-      if(emp) emailAndAttach(emp);
-      setPendingStatus("err",'<span>&#9888;</span> <div style="flex:1"><strong>Auto-send via Power Automate failed</strong> ('+why+'). As a fallback, the prefilled form was downloaded and an email draft opened \u2014 please attach the form and send.<br><span style="font-size:12px">Tip: add a branch in your flow that handles <code>triggerBody().action == "sendReminders"</code> to enable one-click email.</span></div>');
-      toast("Auto-send failed","Form downloaded + email draft opened so you can send manually.");
+      // Do NOT silently open a draft — that's what made it look like the mail
+      // "opened instead of sending". Show exactly what the flow reported so the
+      // Power Automate side can be fixed. (Manual draft is still one click away.)
+      setPendingStatus("err",'<span>&#9888;</span> <div style="flex:1"><strong>Power Automate didn\u2019t confirm the send \u2014 the reminder was NOT emailed.</strong> ('+escH(why)+')<br><span style="font-size:12px">Open your flow\u2019s <strong>Run history</strong> and check the latest run: whichever step shows a red \u2717 is the cause. Make sure the <strong>Send an email (V2)</strong> step succeeds and the <strong>Response</strong> step returns Status <code>200</code> with body <code>{"ok": true}</code>. To email this one manually meanwhile, use <strong>Open Email + Download Form</strong> in the message window.</span></div>');
+      toast("Not sent","Power Automate didn\u2019t confirm the send \u2014 see the status message.");
     }else{
       generateFormsAllPending();
       setPendingStatus("err",'<span>&#9888;</span> <div style="flex:1"><strong>Auto-send via Power Automate failed</strong> ('+why+'). As a fallback, all pending forms were downloaded \u2014 email each manager and attach their form.<br><span style="font-size:12px">Tip: add a branch in your flow that handles <code>triggerBody().action == "sendReminders"</code> to enable one-click email to all.</span></div>');
