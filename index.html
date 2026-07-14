@@ -1405,11 +1405,12 @@ function buildEmployeeForm(emp){
   ];
 
   // ── Rating widget: 5 styled buttons ──────────────────────────────────────
-  function rWidget(key){
+  function rWidget(key, withND){
     return `<div class="rw" id="rw_${key}">
       <select class="rsel" name="${key}" id="rv_${key}" onchange="updateScore()">
         <option value="">Select rating…</option>
         ${[...RATINGS].reverse().map(r=>`<option value="${r.v}">${r.v} (${r.label})</option>`).join("")}
+        ${withND?`<option value="nd">Not Demonstrated Yet</option>`:""}
       </select>
     </div>`;
   }
@@ -1434,7 +1435,7 @@ function buildEmployeeForm(emp){
         ${i===0?`<td class="td-cat tc-re" rowspan="${roEff.length}"><div class="cat-inner">Role<br>Effectiveness</div></td>`:""}
         <td class="td-area">${escH(po.subCategory||"Performance Objective "+(i+1))}</td>
         <td class="td-q">${escH(po.objective||po.subCategory)}${po._placeholder?`<div class="q-hint">Add Performance Objectives in the Recruiter Entry portal to pre-fill this section.</div>`:""}</td>
-        <td class="td-r">${po._placeholder?"<span style='color:#94a3b8;font-size:12px'>No POs defined</span>":rWidget("re_"+i)}</td>
+        <td class="td-r">${po._placeholder?"<span style='color:#94a3b8;font-size:12px'>No POs defined</span>":rWidget("re_"+i, true)}</td>
       </tr>`;
     });
     return rows;
@@ -1615,11 +1616,11 @@ td{border:1px solid #e8edf4;padding:10px 12px;vertical-align:middle}
 <!-- ── Header ── -->
 <div class="form-header">
   <div class="form-header-top">
-    <div class="form-brand">QualityHire<span>90-Day Assessment Form</span></div>
+    <div class="form-brand">90-Day Assessment Form<span>Quality of Hire</span></div>
   </div>
   <div class="form-sub">
     <span>90-Day Connect</span>
-    <span>Confidential — Manager Assessment</span>
+    <span>Confidential</span>
   </div>
 </div>
 
@@ -1738,7 +1739,7 @@ function pickRec(sel){
 }
 
 function avg(keys){
-  const vals=keys.map(k=>{const h=document.getElementById("rv_"+k);return h&&h.value?parseFloat(h.value):null;}).filter(v=>v!==null);
+  const vals=keys.map(k=>{const h=document.getElementById("rv_"+k);if(!h||!h.value)return null;const n=parseFloat(h.value);return isNaN(n)?null:n;}).filter(v=>v!==null);
   if(!vals.length)return null;
   return vals.reduce((s,v)=>s+v,0)/vals.length;
 }
@@ -1759,7 +1760,7 @@ function updateScore(){
   }
 }
 
-function getVal(key){const h=document.getElementById("rv_"+key);return h&&h.value?parseFloat(h.value):null;}
+function getVal(key){const h=document.getElementById("rv_"+key);if(!h||!h.value)return null;const n=parseFloat(h.value);return isNaN(n)?null:n;}
 function getValStr(key){const h=document.getElementById("rv_"+key);return h?h.value:"";}
 
 async function submitForm(){
@@ -1800,7 +1801,7 @@ async function submitForm(){
     SubmittedDate:date,
     OverallRecommendation:recVal,
     Comments:comments,
-    RatingsDetail:JSON.stringify({re:RE_KEYS.map(getVal),gp:GP_KEYS.map(getVal),ps:PS_KEYS.map(getVal),cc:CC_KEYS.map(getVal)})
+    RatingsDetail:JSON.stringify({re:RE_KEYS.map(getValStr),gp:GP_KEYS.map(getValStr),ps:PS_KEYS.map(getValStr),cc:CC_KEYS.map(getValStr)})
   };
   // Section-based JSON (used ONLY as a fallback if the backend can't be reached)
   const result={ assessments:[{
@@ -1808,7 +1809,7 @@ async function submitForm(){
     submittedBy:name, submittedByEmail:email, submittedDate:date,
     finalScore:finalScore, overallRecommendation:recVal, comments:comments,
     sections:{
-      roleEffectiveness:{score:Math.round(reScore*100)/100, ratings:RE_KEYS.map(getVal)},
+      roleEffectiveness:{score:Math.round(reScore*100)/100, ratings:RE_KEYS.map(getValStr)},
       growthPotential:{score:Math.round(gpScore*100)/100, ratings:GP_KEYS.map(getVal)},
       problemSolving:{score:Math.round(psScore*100)/100, ratings:PS_KEYS.map(getVal)},
       culture:{score:Math.round(ccScore*100)/100, ratings:CC_KEYS.map(getVal)}
@@ -2095,7 +2096,11 @@ function openAssessmentView(empId){
   if(!a){ body.innerHTML='<p style="color:var(--ink3)">No submitted assessment found for this employee.</p>'; ov.classList.add("open"); return; }
   const ri=rI(a.finalScore||0);
   const sec=a.sections||{};
-  const meaning=v=>{v=parseInt(v);return (v>=1&&v<=5)?(v+" — "+ASSESS_MEANING[v]):'<span style="color:var(--ink4)">Not rated</span>';};
+  const meaning=v=>{
+    if(v==="nd"||v==="ND"||v==="Not Demonstrated Yet") return "Not Demonstrated Yet";
+    const n=parseInt(v);
+    return (n>=1&&n<=5)?(n+" — "+ASSESS_MEANING[n]):'<span style="color:var(--ink4)">Not rated</span>';
+  };
 
   const pos=(emp.performanceObjectives||[]);
   const reR=(sec.roleEffectiveness&&sec.roleEffectiveness.ratings)||[];
@@ -2628,12 +2633,13 @@ function renderRecruiter(){
   </div>
   ${recEmps.length?`<div class="card">
     <div class="chdr"><span class="ct">&#127919; Employees with Performance Objectives <span class="bdg b-g" style="margin-left:8px">${recEmps.length}</span></span></div>
-    <div class="tw"><table><thead><tr><th>Employee</th><th>Department</th><th>Designation</th><th>90-Day Date</th><th>Manager</th><th style="text-align:center">POs</th><th>Performance Objectives</th></tr></thead>
+    <div class="tw"><table><thead><tr><th>Employee</th><th>Department</th><th>Designation</th><th>90-Day Date</th><th>Manager</th><th>Recruiter</th><th style="text-align:center">POs</th><th>Performance Objectives</th></tr></thead>
     <tbody>${recEmps.map(e=>{const st=empStatus(e);return`<tr>
       <td><div style="font-weight:700">${escH(e.name)}</div><div style="font-size:11px;color:#94a3b8">${escH(e.id)}</div></td>
       <td style="color:#64748b">${escH(e.department||"-")}</td><td style="color:#64748b">${escH(e.designation||"-")}</td>
       <td style="white-space:nowrap;font-weight:600">${fD(st.day90)}</td>
       <td style="color:#64748b">${escH(e.manager||"-")}</td>
+      <td style="color:#64748b">${escH(e.recruiter||"-")}</td>
       <td style="text-align:center"><span class="bdg b-b">${e.performanceObjectives.length}</span></td>
       <td style="font-size:12px;color:#475569">${e.performanceObjectives.map((p,i)=>`<strong>${i+1}.</strong> <em style="color:#94a3b8">${escH(p.subCategory)}:</em> ${escH(p.objective)}`).join("<br>")}</td>
     </tr>`;}).join("")}</tbody></table></div>
@@ -2654,7 +2660,10 @@ function buildManualRecForm(){
   const f=document.getElementById("manRecForm");if(!f)return;
   f.innerHTML=`
   <div style="margin-bottom:22px">
-    <div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px">Employee Details</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+      <div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.08em">Employee Details</div>
+      <div style="font-size:11.5px;color:#64748b">Recruiter: <strong style="color:#0d4f3c">${(_authUser&&_authUser.name)||"—"}</strong> <span style="color:#94a3b8">· auto-filled from your login</span></div>
+    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:13px">
       ${[["rn","Employee Name","Priya Sharma","text","*"],["ri","Employee ID","ALT/IND/50200","text","*"],["rd","Department","Inside Sales","text","*"],["rdes","Designation / Role","SDR","text","*"],["rdoj","Date of Joining","","date","*"],["rm","Manager Name","Manager Name","text","*"],["rme","Manager Email","manager@altudo.co","email","*"],["rl","Location","Pune","text",""]]
         .map(([id,lbl,ph,type,req])=>`<div><label style="display:block;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">${lbl}${req?` <span style="color:#ef4444">${req}</span>`:""}</label><input class="fi" id="${id}" placeholder="${ph}" type="${type}" style="width:100%"></div>`).join("")}
@@ -2716,7 +2725,7 @@ function submitManualRecEntry(){
   if(EMPS.find(e=>e.id===id)){show("Employee ID already exists.");return;}
   const pos=_collectManualPOs();
   if(!pos.length){show("Add at least one Performance Objective.");return;}
-  const newEmp={id,name,department:dept,designation:desig,doj,manager:mgr,managerEmail:mgrEmail,location:loc,performanceObjectives:pos};
+  const newEmp={id,name,department:dept,designation:desig,doj,manager:mgr,managerEmail:mgrEmail,location:loc,recruiter:(_authUser&&_authUser.name)||"",performanceObjectives:pos};
   const d=rSt();d.employees=d.employees||[];d.employees.push(newEmp);wSt(d);
   // Save to local stores (instant, offline-safe)
   saveRecruiterEmp(newEmp);
@@ -2861,6 +2870,7 @@ function handleRecruiterUpload(file){
       }
 
       emp.performanceObjectives=pos;
+      emp.recruiter=emp.recruiter||((_authUser&&_authUser.name)||"");
       _recPreviewEmp=emp;
       _showRecPreview(emp);
     }catch(err){
