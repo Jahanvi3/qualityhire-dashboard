@@ -44,6 +44,21 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg)
 .modal-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px}
 .modal-title{font-size:17px;font-weight:800;color:var(--ink)}
 .modal-x{background:none;border:none;font-size:22px;cursor:pointer;color:var(--ink4);transition:color var(--ease);line-height:1}.modal-x:hover{color:var(--ink)}
+.va-meta{display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;background:var(--bg,#f8fafc);border:1px solid #e2e8f0;border-radius:12px;padding:14px 18px;margin-bottom:16px;font-size:13px;color:var(--ink)}
+.va-meta>div{display:flex;flex-direction:column;gap:2px}
+.va-meta span{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink4)}
+.va-secttl{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:800;color:#0d4f3c;margin:20px 0 8px}
+.part-num2{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;background:#0d4f3c;color:#fff;font-size:12px;font-weight:800}
+.va-tbl{width:100%;border-collapse:collapse;font-size:12.5px;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden}
+.va-tbl th{background:#f1f5f9;text-align:left;padding:8px 12px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3,#64748b);border-bottom:1px solid #e2e8f0}
+.va-tbl td{padding:9px 12px;border-bottom:1px solid #eef2f6;vertical-align:top;color:var(--ink)}
+.va-tbl tr:last-child td{border-bottom:none}
+.va-area{font-weight:700;width:200px}
+.va-q{color:var(--ink3,#475569)}
+.va-r{font-weight:700;color:#0d4f3c;white-space:nowrap}
+.va-cat td{background:#f8fafc;font-weight:800;color:#334155;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em}
+.va-box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 16px;font-size:13px;color:var(--ink);white-space:pre-wrap;line-height:1.5}
+.va-note{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:10px;padding:11px 15px;font-size:12px;line-height:1.5;margin-bottom:8px}
 @keyframes slideUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
 
 /* ── Layout ── */
@@ -633,7 +648,8 @@ function importResults(){
                 SubmittedByEmail:a.submittedByEmail||"",
                 SubmittedDate:a.submittedDate||"",
                 OverallRecommendation:a.overallRecommendation||"",
-                Comments:a.comments||""
+                Comments:a.comments||"",
+                RatingsDetail:a.RatingsDetail||(a.sections?JSON.stringify({re:(a.sections.roleEffectiveness||{}).ratings||[],gp:(a.sections.growthPotential||{}).ratings||[],ps:(a.sections.problemSolving||{}).ratings||[],cc:(a.sections.culture||{}).ratings||[]}):"")
               }));
               api({action:"saveAssessments",assessments:rows})
                 .then(()=>toast("Synced to Excel","Assessment results saved to Excel Online ✓"))
@@ -825,7 +841,18 @@ function rowToAsm(r){
   const ratings={};
   RATING_KEYS.forEach(k=>{const v=_pick(r,[RATING_COL[k],k]);ratings[k]=v===""?0:(parseFloat(v)||0);});
   const fs=_pick(r,["FinalScore","finalScore","QOH Score"]);
-  return {
+  // Reconstruct the manager's per-question answers if the row carries them (single JSON column)
+  let sections=null;
+  const rd=_pick(r,["RatingsDetail","ratingsDetail"]);
+  if(rd){ try{ const p=(typeof rd==="string")?JSON.parse(rd):rd;
+    sections={
+      roleEffectiveness:{ratings:Array.isArray(p.re)?p.re:[]},
+      growthPotential:{ratings:Array.isArray(p.gp)?p.gp:[]},
+      problemSolving:{ratings:Array.isArray(p.ps)?p.ps:[]},
+      culture:{ratings:Array.isArray(p.cc)?p.cc:[]}
+    };
+  }catch(e){} }
+  const out={
     employeeId:String(_pick(r,["EmployeeId","employeeId","Employee ID"])),
     period:String(_pick(r,["Period","period"])||"90-Day"),
     submittedDate:_toDateInput(_pick(r,["SubmittedDate","submittedDate","Date","date","submittedAt","SubmittedAt"]))||String(_pick(r,["SubmittedDate","submittedDate","Date","date","submittedAt","SubmittedAt"])),
@@ -833,12 +860,16 @@ function rowToAsm(r){
     submittedByEmail:String(_pick(r,["SubmittedByEmail","submittedByEmail"])),
     ratings, finalScore: fs===""?0:(parseFloat(fs)||0),
     rating:String(_pick(r,["Rating","rating"])),
+    overallRecommendation:String(_pick(r,["OverallRecommendation","overallRecommendation","Recommendation","recommendation"])),
+    comments:String(_pick(r,["Comments","comments"])),
     strengths:String(_pick(r,["Strengths","strengths"])),
     improvements:String(_pick(r,["Improvements","improvements","Development Areas"])),
     support:String(_pick(r,["Support","support"])),
     factorComments:String(_pick(r,["FactorComments","factorComments"])),
     submittedAt:String(_pick(r,["SubmittedAt","submittedAt"]))
   };
+  if(sections) out.sections=sections;
+  return out;
 }
 function empToRow(e){
   return {EmployeeId:e.id,Name:e.name,Email:e.email||"",Department:e.department||"",Designation:e.designation||"",DOJ:e.doj||"",Manager:e.manager||"",ManagerEmail:e.managerEmail||"",Mentor:e.mentor||"",Location:e.location||"",EmploymentType:e.employmentType||"Full-time",Recruiter:e.recruiter||"",HiringSource:e.hiringSource||""};
@@ -1587,6 +1618,7 @@ td{border:1px solid #e8edf4;padding:10px 12px;vertical-align:middle}
     <div class="form-brand">QualityHire<span>90-Day Assessment Form</span></div>
   </div>
   <div class="form-sub">
+    <span>90-Day Connect</span>
     <span>Confidential — Manager Assessment</span>
   </div>
 </div>
@@ -1599,10 +1631,9 @@ td{border:1px solid #e8edf4;padding:10px 12px;vertical-align:middle}
   <div class="emp-field"><div class="emp-lbl">Department</div><div class="emp-val">${emp.department||"—"}</div></div>
   <div class="day90-badge"><div class="emp-lbl">90-Day Date</div><div class="emp-val">${day90Str}</div></div>
 </div>
-<div class="emp-bar" style="grid-template-columns:repeat(3,1fr);border-top:1px dashed #e2e8f0;padding-top:12px;padding-bottom:12px">
+<div class="emp-bar" style="grid-template-columns:repeat(2,1fr);border-top:1px dashed #e2e8f0;padding-top:12px;padding-bottom:12px">
   <div class="emp-field"><div class="emp-lbl">Date of Joining</div><div class="emp-val">${dojStr}</div></div>
   <div class="emp-field"><div class="emp-lbl">Manager / Assessor</div><div class="emp-val">${emp.manager||"—"}</div></div>
-  <div class="emp-field"><div class="emp-lbl">Assessment Period</div><div class="emp-val"></div></div>
 </div>
 
 <!-- ── Part 1: Role Effectiveness (added by recruiter) ── -->
@@ -1613,7 +1644,7 @@ td{border:1px solid #e8edf4;padding:10px 12px;vertical-align:middle}
       <tr>
         <th>Category</th>
         <th>Assessment Area</th>
-        <th style="min-width:260px">Question</th>
+        <th style="min-width:260px">Objective</th>
         <th style="min-width:200px">Rating</th>
       </tr>
     </thead>
@@ -1768,7 +1799,8 @@ async function submitForm(){
     SubmittedByEmail:email,
     SubmittedDate:date,
     OverallRecommendation:recVal,
-    Comments:comments
+    Comments:comments,
+    RatingsDetail:JSON.stringify({re:RE_KEYS.map(getVal),gp:GP_KEYS.map(getVal),ps:PS_KEYS.map(getVal),cc:CC_KEYS.map(getVal)})
   };
   // Section-based JSON (used ONLY as a fallback if the backend can't be reached)
   const result={ assessments:[{
@@ -2035,6 +2067,72 @@ const fD=d=>d?new Date(d).toLocaleDateString("en-IN",{day:"2-digit",month:"short
 const getMo=d=>new Date(d).getMonth()+1;
 const getQ=d=>Math.ceil(getMo(d)/3);
 function rI(s){if(s>=4.5)return{l:"Exceptional",c:"b-p"};if(s>=3.5)return{l:"Strong",c:"b-g"};if(s>=2.5)return{l:"Developing",c:"b-y"};if(s>=1.5)return{l:"At Risk",c:"b-r"};return{l:"Critical",c:"b-r"};}
+
+// ── Completed-assessment viewer (mirrors the manager form) ──────────────────
+const ASSESS_MEANING={1:"Under Performance",2:"Partially Meets Expectations",3:"Meets Expectations",4:"Exceeds Expectations",5:"Outstanding Performance"};
+const ASSESS_SECTIONS=[
+  {key:"growthPotential", cat:"Growth Potential & Learning Ability", areas:[
+    {area:"Learning Ability", q:"How quickly has the Altudian become productive, and how effectively do they incorporate feedback and learning into their work?"},
+    {area:"Ambition & Growth Orientation", q:"How proactively does the Altudian seek opportunities to learn, grow, and contribute beyond assigned responsibilities?"}
+  ]},
+  {key:"problemSolving", cat:"Problem Solving & Ownership", areas:[
+    {area:"Consultative Problem Solving", q:"When facing problems, how effectively does the Altudian analyse issues and propose solutions, considering business, client, or team impact, rather than only escalating them?"},
+    {area:"Ownership and Independent working (Achiever Pattern)", q:"How consistently does the Altudian take ownership, work independently, and deliver high-quality outcomes against commitments?"}
+  ]},
+  {key:"culture", cat:"Culture & Collaboration", areas:[
+    {area:"Culture Fitment", q:"How effectively has the Altudian built productive relationships and demonstrated Altudo values through accountability, attitude towards responsibilities, and collaboration?"},
+    {area:"Function Fitment", q:"How effectively is the Altudian performing the core responsibilities of the role, and how confident are stakeholders in their ability to deliver?"}
+  ]}
+];
+function openAssessmentView(empId){
+  const emp=EMPS.find(e=>e.id===empId); if(!emp) return;
+  const st=empStatus(emp); const a=st.asm;
+  const ov=document.getElementById("viewAsmOverlay");
+  const body=document.getElementById("viewAsmBody");
+  const titleEl=document.getElementById("viewAsmTitle");
+  const esc=s=>String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  titleEl.textContent="90-Day Assessment — "+emp.name;
+  if(!a){ body.innerHTML='<p style="color:var(--ink3)">No submitted assessment found for this employee.</p>'; ov.classList.add("open"); return; }
+  const ri=rI(a.finalScore||0);
+  const sec=a.sections||{};
+  const meaning=v=>{v=parseInt(v);return (v>=1&&v<=5)?(v+" — "+ASSESS_MEANING[v]):'<span style="color:var(--ink4)">Not rated</span>';};
+
+  const pos=(emp.performanceObjectives||[]);
+  const reR=(sec.roleEffectiveness&&sec.roleEffectiveness.ratings)||[];
+  let p1 = pos.length
+    ? pos.map((po,i)=>`<tr><td class="va-area">${esc(po.subCategory||("Performance Objective "+(i+1)))}</td><td class="va-q">${esc(po.objective||po.subCategory||"")}</td><td class="va-r">${meaning(reR[i])}</td></tr>`).join("")
+    : `<tr><td colspan="3" style="color:var(--ink4)">No performance objectives were defined for this employee.</td></tr>`;
+
+  const p2 = ASSESS_SECTIONS.map(s=>{
+    const rr=(sec[s.key]&&sec[s.key].ratings)||[];
+    const rows=s.areas.map((ar,i)=>`<tr><td class="va-area">${esc(ar.area)}</td><td class="va-q">${esc(ar.q)}</td><td class="va-r">${meaning(rr[i])}</td></tr>`).join("");
+    return `<tr class="va-cat"><td colspan="3">${esc(s.cat)}</td></tr>${rows}`;
+  }).join("");
+
+  const hasDetail = !!(a.sections && [sec.roleEffectiveness,sec.growthPotential,sec.problemSolving,sec.culture]
+      .some(x=>x&&Array.isArray(x.ratings)&&x.ratings.some(v=>parseFloat(v)>0)));
+  const note = hasDetail ? "" :
+    `<div class="va-note">Question-by-question answers aren't stored for this assessment. They appear automatically once your Excel table has a <strong>RatingsDetail</strong> column (managers' forms already send it). The overall score, recommendation and comments below are always available.</div>`;
+
+  body.innerHTML=`
+    <div class="va-meta">
+      <div><span>Employee</span>${esc(emp.name)} · ${esc(emp.id)}</div>
+      <div><span>Assessed by</span>${esc(a.submittedBy||"—")}${a.submittedByEmail?" · "+esc(a.submittedByEmail):""}</div>
+      <div><span>Date</span>${esc(fD(a.submittedDate)||a.submittedDate||"—")}</div>
+      <div><span>QOH Score</span><strong>${a.finalScore||"—"}</strong> &nbsp;<span class="bdg ${ri.c}">${ri.l}</span></div>
+    </div>
+    ${note}
+    <div class="va-secttl"><span class="part-num2">1</span> Role Effectiveness</div>
+    <table class="va-tbl"><thead><tr><th>Assessment Area</th><th>Objective</th><th style="width:150px">Rating</th></tr></thead><tbody>${p1}</tbody></table>
+    <div class="va-secttl"><span class="part-num2">2</span> Manager Assessment</div>
+    <table class="va-tbl"><thead><tr><th>Assessment Area</th><th>Question</th><th style="width:150px">Rating</th></tr></thead><tbody>${p2}</tbody></table>
+    <div class="va-secttl">Overall Recommendation</div>
+    <div class="va-box">${esc(a.overallRecommendation||a.recommendation||"—")}</div>
+    <div class="va-secttl">Manager Comments</div>
+    <div class="va-box">${esc(a.comments||a.factorComments||"—")}</div>`;
+  ov.classList.add("open");
+}
+function closeAssessmentView(){ document.getElementById("viewAsmOverlay").classList.remove("open"); }
 function sCol(s){return s>=4?"#10b981":s>=3?"#f59e0b":"#ef4444";}
 
 // ── Init ─────────────────────────────────────────────────────────────────
@@ -2571,7 +2669,7 @@ function buildManualRecForm(){
       <button class="btn btn-am btn-sm" onclick="addManualPORow()">&#43; Add Row</button>
     </div>
     <div style="display:grid;grid-template-columns:30px 1fr 2fr auto;gap:8px;margin:14px 0 6px;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em">
-      <div>#</div><div>Sub-Category / Area</div><div>Performance Objective</div><div></div>
+      <div>#</div><div>Assessment Area</div><div>Objective</div><div></div>
     </div>
     <div id="manPORows"></div>
     <button class="btn btn-sec btn-sm" style="margin-top:10px" onclick="addManualPORow()">&#43; Add objective</button>
@@ -2659,20 +2757,20 @@ function downloadRecruiterTemplate(){
   ws1["!merges"]=[{s:{r:0,c:0},e:{r:0,c:1}},{s:{r:1,c:0},e:{r:1,c:1}}];
   XLSX.utils.book_append_sheet(wb,ws1,"Employee Details");
 
-  // Sheet 2: Performance Objectives (# | QUESTION format)
+  // Sheet 2: Performance Objectives (# | ASSESSMENT AREA | OBJECTIVE)
   const poRows=[
     ["PERFORMANCE OBJECTIVES \u2014 Role Effectiveness (40%)"],
-    ["Add at least 1 row. Each PO will be rated 1\u20135 by the manager at 90 days."],
-    ["#","QUESTION"],
-    ["1",""],
-    ["2",""],
-    ["3",""],
-    ["4",""],
-    ["5",""]
+    ["Add at least 1 row. Each objective will be rated 1\u20135 by the manager at 90 days."],
+    ["#","ASSESSMENT AREA","OBJECTIVE"],
+    ["1","",""],
+    ["2","",""],
+    ["3","",""],
+    ["4","",""],
+    ["5","",""]
   ];
   const ws2=XLSX.utils.aoa_to_sheet(poRows);
-  ws2["!cols"]=[{wch:5},{wch:90}];
-  ws2["!merges"]=[{s:{r:0,c:0},e:{r:0,c:1}},{s:{r:1,c:0},e:{r:1,c:1}}];
+  ws2["!cols"]=[{wch:5},{wch:30},{wch:70}];
+  ws2["!merges"]=[{s:{r:0,c:0},e:{r:0,c:2}},{s:{r:1,c:0},e:{r:1,c:2}}];
   XLSX.utils.book_append_sheet(wb,ws2,"Performance Objectives");
 
   // Sheet 3: Rating Scale
@@ -2724,20 +2822,23 @@ function handleRecruiterUpload(file){
         if(field&&FIELD_MAP[field]&&value) emp[FIELD_MAP[field]]=value;
       });
 
-      // Parse Performance Objectives (# | QUESTION format)
+      // Parse Performance Objectives (# | ASSESSMENT AREA | OBJECTIVE)
       const ws2=wb.Sheets["Performance Objectives"];
       const pos=[];
       if(ws2){
         const rows2=XLSX.utils.sheet_to_json(ws2,{header:1,defval:""});
         rows2.forEach(row=>{
           const num=String(row[0]||"").trim();
-          const question=String(row[1]||"").trim();
-          // rows where col-0 is a digit and col-1 has real content (not the header)
-          if(/^\d+$/.test(num) && question && question.toUpperCase()!=="QUESTION"){
+          let area=String(row[1]||"").trim();
+          let objective=String(row[2]||"").trim();
+          // Back-compat: old template had only "# | QUESTION" (objective sat in col 1)
+          if(!objective && area && area.toUpperCase()!=="QUESTION"){ objective=area; area=""; }
+          const isHeader=v=>{v=v.toUpperCase();return v==="QUESTION"||v==="OBJECTIVE"||v==="ASSESSMENT AREA";};
+          if(/^\d+$/.test(num) && objective && !isHeader(objective)){
             pos.push({
               category:"Role Effectiveness",
-              subCategory:"PO "+num,
-              objective:question,
+              subCategory:area||("PO "+num),
+              objective:objective,
               notes:""
             });
           }
@@ -3108,7 +3209,10 @@ function renderPending(){
             <button class="btn btn-ghost btn-sm" data-msgid="${emp.id}" title="Preview / copy the email">&#128203; Draft</button>
           </div>`;
         }else if(st.s==="Completed"){
-          actionHtml=`<span style="font-size:12px;color:#059669">&#10003; Assessed ${fD(st.asm&&st.asm.submittedDate)}</span>`;
+          actionHtml=`<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <span style="font-size:12px;color:#059669">&#10003; Assessed ${fD(st.asm&&st.asm.submittedDate)}</span>
+            <button class="btn btn-ghost btn-sm" data-viewasm="${emp.id}" title="View the completed assessment form">&#128065; View</button>
+          </div>`;
         }else{
           actionHtml=`<span style="font-size:12px;color:#94a3b8">Upcoming ${fD(st.day90)}</span>`;
         }
@@ -3138,6 +3242,7 @@ function renderPending(){
     pT.querySelectorAll("[data-remind-init]").forEach(btn=>{btn.addEventListener("click",()=>sendReminderToEmp(btn.dataset.remindInit,'initial'));});
     pT.querySelectorAll("[data-remind-follow]").forEach(btn=>{btn.addEventListener("click",()=>sendReminderToEmp(btn.dataset.remindFollow,'reminder'));});
     pT.querySelectorAll("[data-genform]").forEach(btn=>{btn.addEventListener("click",()=>downloadEmployeeForm(btn.dataset.genform));});
+    pT.querySelectorAll("[data-viewasm]").forEach(btn=>{btn.addEventListener("click",()=>openAssessmentView(btn.dataset.viewasm));});
     pT.querySelectorAll("[data-tgl]").forEach(btn=>{btn.addEventListener("click",()=>toggleAutoEmp(btn.dataset.tgl));});
   }
 }
@@ -3594,6 +3699,16 @@ function expEmpStatus(){const pickF=(a,keys)=>{for(const k of keys){if(a&&a[k]!=
       <button class="modal-x" onclick="closeEmpModal()">&#215;</button>
     </div>
     <div id="empModalBody"></div>
+  </div>
+</div>
+
+<div class="overlay" id="viewAsmOverlay" onclick="if(event.target===this)closeAssessmentView()">
+  <div class="modal" style="max-width:880px">
+    <div class="modal-hdr">
+      <div class="modal-title" id="viewAsmTitle">90-Day Assessment</div>
+      <button class="modal-x" onclick="closeAssessmentView()">&#215;</button>
+    </div>
+    <div id="viewAsmBody"></div>
   </div>
 </div>
 
