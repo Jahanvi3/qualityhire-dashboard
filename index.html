@@ -59,6 +59,9 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg)
 .va-cat td{background:#f8fafc;font-weight:800;color:#334155;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em}
 .va-box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 16px;font-size:13px;color:var(--ink);white-space:pre-wrap;line-height:1.5}
 .va-note{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:10px;padding:11px 15px;font-size:12px;line-height:1.5;margin-bottom:8px}
+.epi{width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;font-family:inherit;color:#0f172a;outline:none}
+.epi:focus{border-color:#f59e0b}
+.epi-x{background:none;border:none;color:#94a3b8;cursor:pointer;font-size:17px;line-height:1;padding:0}.epi-x:hover{color:#dc2626}
 @keyframes slideUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
 
 /* ── Layout ── */
@@ -830,6 +833,20 @@ function rowToEmp(r){
     recruiter:String(_pick(r,["Recruiter","recruiter","Recruiter Name"])),
     hiringSource:String(_pick(r,["HiringSource","hiringSource","Hiring Source"]))
   };
+  // Project details: prefer a JSON column, else fall back to discrete first-project columns
+  let projects=[];
+  const projRaw=_pick(r,["ProjectDetails","projectDetails","ProjectsJSON"]);
+  if(projRaw){ try{ const arr=typeof projRaw==="string"?JSON.parse(projRaw):projRaw; if(Array.isArray(arr)) projects=arr; }catch(_){} }
+  if(!projects.length){
+    const pn=_pick(r,["Project","project","Project Name"]);
+    const pst=_pick(r,["StartDate","Start Date","projectStart"]);
+    const pen=_pick(r,["EndDate","End Date","End date","projectEnd"]);
+    const ppm=_pick(r,["PM","pm"]);
+    const pdd=_pick(r,["DD","dd"]);
+    const pal=_pick(r,["Allocation","allocation","Allocation %"]);
+    if(pn||pst||pen||ppm||pdd||pal) projects=[{name:String(pn||""),start:_toDateInput(pst)||String(pst||""),end:_toDateInput(pen)||String(pen||""),pm:String(ppm||""),dd:String(pdd||""),allocation:String(pal||"")}];
+  }
+  if(projects.length) e.projects=projects;
   // Performance Objectives may come back as a JSON string in a "POs" column
   const poRaw=_pick(r,["POs","pos","PerformanceObjectives","performanceObjectives"]);
   if(poRaw){
@@ -857,6 +874,14 @@ function rowToAsm(r){
   let projects=[];
   const pj=_pick(r,["Projects","projects"]);
   if(pj){ try{ const p=(typeof pj==="string")?JSON.parse(pj):pj; if(Array.isArray(p)) projects=p; }catch(e){} }
+  if(!projects.length){
+    const pn=_pick(r,["Project","project","Project Name"]);
+    const pst=_pick(r,["StartDate","Start Date","startDate"]);
+    const pen=_pick(r,["EndDate","End Date","End date","endDate"]);
+    const ppm=_pick(r,["PM","pm"]);
+    const pdd=_pick(r,["DD","dd"]);
+    if(pn||pst||pen||ppm||pdd) projects=[{name:pn,start:pst,end:pen,pm:ppm,dd:pdd}];
+  }
   const out={
     employeeId:String(_pick(r,["EmployeeId","employeeId","Employee ID"])),
     period:String(_pick(r,["Period","period"])||"90-Day"),
@@ -878,7 +903,9 @@ function rowToAsm(r){
   return out;
 }
 function empToRow(e){
-  return {EmployeeId:e.id,Name:e.name,Email:e.email||"",Department:e.department||"",Designation:e.designation||"",DOJ:e.doj||"",Manager:e.manager||"",ManagerEmail:e.managerEmail||"",Mentor:e.mentor||"",Location:e.location||"",EmploymentType:e.employmentType||"Full-time",Recruiter:e.recruiter||"",HiringSource:e.hiringSource||""};
+  const pjs=Array.isArray(e.projects)?e.projects:[];
+  const p0=pjs[0]||{};
+  return {EmployeeId:e.id,Name:e.name,Email:e.email||"",Department:e.department||"",Designation:e.designation||"",DOJ:e.doj||"",Manager:e.manager||"",ManagerEmail:e.managerEmail||"",Mentor:e.mentor||"",Location:e.location||"",EmploymentType:e.employmentType||"Full-time",Recruiter:e.recruiter||"",HiringSource:e.hiringSource||"",Project:p0.name||"",StartDate:p0.start||"",EndDate:p0.end||"",PM:p0.pm||"",DD:p0.dd||"",Allocation:p0.allocation||"",ProjectDetails:JSON.stringify(pjs)};
 }
 
 // ── Top banner used for backend status (config missing / fetch failed) ───────
@@ -1392,6 +1419,11 @@ function buildEmployeeForm(emp){
   const st = empStatus(emp);
   const day90Str = st.day90 ? new Date(st.day90).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : "—";
   const dojStr   = emp.doj  ? new Date(emp.doj).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : "—";
+  const _fmtPD = d => d ? new Date(d).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : "—";
+  const _empProjects = Array.isArray(emp.projects) ? emp.projects : [];
+  const projectRowsHtml = _empProjects.length
+    ? _empProjects.map(p=>`<tr><td>${escH(p.name||"—")}</td><td>${escH(_fmtPD(p.start))}</td><td>${escH(_fmtPD(p.end))}</td><td>${escH(p.pm||"—")}</td><td>${escH(p.dd||"—")}</td><td>${p.allocation?escH(String(p.allocation))+"%":"—"}</td></tr>`).join("")
+    : `<tr><td colspan="6" style="color:#94a3b8">No project details added.</td></tr>`;
   const pos = (emp.performanceObjectives||[]);
 
   // ── Rating scale (1-5) ───────────────────────────────────────────────────
@@ -1644,24 +1676,23 @@ td{border:1px solid #e8edf4;padding:10px 12px;vertical-align:middle}
   <div class="emp-field"><div class="emp-lbl">Manager / Assessor</div><div class="emp-val">${emp.manager||"—"}</div></div>
 </div>
 
-<!-- ── Project Details ── -->
+<!-- ── Project Details (read-only · maintained by HR) ── -->
 <div class="part-title"><span class="part-num" style="background:#334155">&#9632;</span> Project Details</div>
 <div class="tbl-wrap" style="margin-bottom:6px">
   <table>
     <thead>
       <tr>
         <th>Project Name</th>
-        <th style="width:150px">Start Date</th>
-        <th style="width:150px">End Date</th>
-        <th style="width:150px">PM</th>
-        <th style="width:150px">DD</th>
-        <th style="width:44px"></th>
+        <th style="width:130px">Start Date</th>
+        <th style="width:130px">End Date</th>
+        <th style="width:120px">PM</th>
+        <th style="width:120px">DD</th>
+        <th style="width:95px">Allocation</th>
       </tr>
     </thead>
-    <tbody id="projRows"></tbody>
+    <tbody>${projectRowsHtml}</tbody>
   </table>
 </div>
-<button type="button" class="proj-add" onclick="addProjectRow()">&#43; Add Project</button>
 
 <!-- ── Part 1: Role Effectiveness (added by recruiter) ── -->
 <div class="part-title"><span class="part-num">1</span> Role Effectiveness</div>
@@ -1789,31 +1820,6 @@ function updateScore(){
 function getVal(key){const h=document.getElementById("rv_"+key);if(!h||!h.value)return null;const n=parseFloat(h.value);return isNaN(n)?null:n;}
 function getValStr(key){const h=document.getElementById("rv_"+key);return h?h.value:"";}
 
-// ── Project Details rows ──────────────────────────────────────────────────
-let _projIdx=0;
-function addProjectRow(){
-  _projIdx++;
-  const tb=document.getElementById("projRows"); if(!tb)return;
-  const tr=document.createElement("tr");
-  tr.innerHTML=`
-    <td><input class="pfi" data-pj="name" placeholder="Project name"></td>
-    <td><input class="pfi" data-pj="start" type="date"></td>
-    <td><input class="pfi" data-pj="end" type="date"></td>
-    <td><input class="pfi" data-pj="pm" placeholder="Project Manager"></td>
-    <td><input class="pfi" data-pj="dd" placeholder="Delivery Director"></td>
-    <td style="text-align:center"><button type="button" class="proj-x" onclick="this.closest('tr').remove()" title="Remove">&#215;</button></td>`;
-  tb.appendChild(tr);
-}
-function collectProjects(){
-  const out=[];
-  document.querySelectorAll("#projRows tr").forEach(r=>{
-    const g=k=>{const el=r.querySelector("[data-pj='"+k+"']");return el?el.value.trim():"";};
-    const p={name:g("name"),start:g("start"),end:g("end"),pm:g("pm"),dd:g("dd")};
-    if(p.name||p.start||p.end||p.pm||p.dd) out.push(p);
-  });
-  return out;
-}
-
 async function submitForm(){
   const errEl=document.getElementById("errMsg");
   errEl.style.display="none";
@@ -1852,14 +1858,13 @@ async function submitForm(){
     SubmittedDate:date,
     OverallRecommendation:recVal,
     Comments:comments,
-    RatingsDetail:JSON.stringify({re:RE_KEYS.map(getValStr),gp:GP_KEYS.map(getValStr),ps:PS_KEYS.map(getValStr),cc:CC_KEYS.map(getValStr)}),
-    Projects:JSON.stringify(collectProjects())
+    RatingsDetail:JSON.stringify({re:RE_KEYS.map(getValStr),gp:GP_KEYS.map(getValStr),ps:PS_KEYS.map(getValStr),cc:CC_KEYS.map(getValStr)})
   };
   // Section-based JSON (used ONLY as a fallback if the backend can't be reached)
   const result={ assessments:[{
     employeeId:"${escJS(emp.id)}", employeeName:"${escJS(emp.name)}", period:"90-Day",
     submittedBy:name, submittedByEmail:email, submittedDate:date,
-    finalScore:finalScore, overallRecommendation:recVal, comments:comments, projects:collectProjects(),
+    finalScore:finalScore, overallRecommendation:recVal, comments:comments,
     sections:{
       roleEffectiveness:{score:Math.round(reScore*100)/100, ratings:RE_KEYS.map(getValStr)},
       growthPotential:{score:Math.round(gpScore*100)/100, ratings:GP_KEYS.map(getVal)},
@@ -1900,9 +1905,6 @@ async function submitForm(){
   btn.textContent="\u2713 Submitted";
   if(hint){ hint.style.color="#b45309"; hint.innerHTML="<strong>Couldn\u2019t reach HR\u2019s system, so a .json file was downloaded instead.</strong> Please email it to HR to import."; }
 }
-
-// Seed one blank project row on load
-addProjectRow();
 <\/script>
 </body>
 </html>`;
@@ -2174,11 +2176,11 @@ function openAssessmentView(empId){
   const note = hasDetail ? "" :
     `<div class="va-note">Question-by-question answers aren't stored for this assessment. They appear automatically once your Excel table has a <strong>RatingsDetail</strong> column (managers' forms already send it). The overall score, recommendation and comments below are always available.</div>`;
 
-  const projects=Array.isArray(a.projects)?a.projects:[];
+  const projects=Array.isArray(emp.projects)?emp.projects:[];
   const projHtml = projects.length ? `
     <div class="va-secttl">Project Details</div>
-    <table class="va-tbl"><thead><tr><th>Project Name</th><th>Start Date</th><th>End Date</th><th>PM</th><th>DD</th></tr></thead><tbody>${
-      projects.map(p=>`<tr><td class="va-area">${esc(p.name||"—")}</td><td>${esc(p.start||"—")}</td><td>${esc(p.end||"—")}</td><td>${esc(p.pm||"—")}</td><td>${esc(p.dd||"—")}</td></tr>`).join("")
+    <table class="va-tbl"><thead><tr><th>Project Name</th><th>Start Date</th><th>End Date</th><th>PM</th><th>DD</th><th>Allocation</th></tr></thead><tbody>${
+      projects.map(p=>`<tr><td class="va-area">${esc(p.name||"—")}</td><td>${esc(p.start||"—")}</td><td>${esc(p.end||"—")}</td><td>${esc(p.pm||"—")}</td><td>${esc(p.dd||"—")}</td><td>${p.allocation?esc(String(p.allocation))+"%":"—"}</td></tr>`).join("")
     }</tbody></table>` : "";
 
   body.innerHTML=`
@@ -3432,6 +3434,16 @@ function openEmpModal(empId){
           onfocus="this.style.borderColor='#f59e0b'" onblur="this.style.borderColor='#e2e8f0'">
       </div>`).join("")}
     </div>
+    <div style="margin-bottom:18px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:9px">
+        <label style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.06em">Project Details</label>
+        <button type="button" class="btn btn-am btn-sm" onclick="addEmpProjRow()" style="padding:5px 12px">&#43; Add Project</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr 1fr .7fr 26px;gap:6px;font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px">
+        <div>Project</div><div>Start</div><div>End</div><div>PM</div><div>DD</div><div>Alloc %</div><div></div>
+      </div>
+      <div id="empProjRows"></div>
+    </div>
     ${isEdit ? `<div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:9px;padding:10px 14px;margin-bottom:16px;font-size:12.5px;color:#dc2626;display:flex;align-items:center;gap:8px">
       <span>&#9888;</span> Deleting this employee will also remove their assessment data permanently.
     </div>` : ""}
@@ -3444,9 +3456,38 @@ function openEmpModal(empId){
     </div>
     <div id="empModalErr" style="margin-top:10px"></div>`;
 
+  const _seed=(emp&&Array.isArray(emp.projects))?emp.projects:[];
+  if(_seed.length) _seed.forEach(p=>addEmpProjRow(p)); else addEmpProjRow();
+
   ov.classList.add("open");
 }
-function closeEmpModal(){ document.getElementById("empModalOverlay").classList.remove("open"); }
+function addEmpProjRow(data){
+  data=data||{};
+  const c=document.getElementById("empProjRows"); if(!c)return;
+  const row=document.createElement("div");
+  row.className="emp-proj-row";
+  row.style.cssText="display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr 1fr .7fr 26px;gap:6px;margin-bottom:6px;align-items:center";
+  row.innerHTML=`
+    <input class="epi" data-ep="name" value="${escH(data.name||"")}" placeholder="Project name">
+    <input class="epi" data-ep="start" type="date" value="${escH(data.start||"")}">
+    <input class="epi" data-ep="end" type="date" value="${escH(data.end||"")}">
+    <input class="epi" data-ep="pm" value="${escH(data.pm||"")}" placeholder="PM">
+    <input class="epi" data-ep="dd" value="${escH(data.dd||"")}" placeholder="DD">
+    <input class="epi" data-ep="allocation" type="number" min="0" max="100" value="${escH(data.allocation!=null?String(data.allocation):"")}" placeholder="%">
+    <button type="button" class="epi-x" title="Remove">&#215;</button>`;
+  const x=row.querySelector(".epi-x");
+  if(x) x.addEventListener("click",function(){ row.remove(); });
+  c.appendChild(row);
+}
+function collectEmpProjects(){
+  const out=[];
+  document.querySelectorAll("#empProjRows .emp-proj-row").forEach(r=>{
+    const g=k=>{const el=r.querySelector("[data-ep='"+k+"']");return el?el.value.trim():"";};
+    const p={name:g("name"),start:g("start"),end:g("end"),pm:g("pm"),dd:g("dd"),allocation:g("allocation")};
+    if(p.name||p.start||p.end||p.pm||p.dd||p.allocation) out.push(p);
+  });
+  return out;
+}
 
 function saveEmp(existingId){
   const get = id => document.getElementById("ef_"+id)?.value.trim()||"";
@@ -3465,7 +3506,8 @@ function saveEmp(existingId){
     id, name, email:get("email"), department:dept, designation:desig, doj,
     manager:get("manager"), managerEmail:get("managerEmail"), mentor:get("mentor"),
     location:get("location"), employmentType:get("employmentType")||"Full-time",
-    recruiter:get("recruiter"), hiringSource:get("hiringSource")
+    recruiter:get("recruiter"), hiringSource:get("hiringSource"),
+    projects:collectEmpProjects()
   };
   let finalEmp;
   if(existingId){
