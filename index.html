@@ -3461,6 +3461,7 @@ function openEmpModal(empId){
 
   ov.classList.add("open");
 }
+function closeEmpModal(){ document.getElementById("empModalOverlay").classList.remove("open"); }
 function addEmpProjRow(data){
   data=data||{};
   const c=document.getElementById("empProjRows"); if(!c)return;
