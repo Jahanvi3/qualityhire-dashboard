@@ -649,7 +649,8 @@ function importResults(){
                 SubmittedDate:a.submittedDate||"",
                 OverallRecommendation:a.overallRecommendation||"",
                 Comments:a.comments||"",
-                RatingsDetail:a.RatingsDetail||(a.sections?JSON.stringify({re:(a.sections.roleEffectiveness||{}).ratings||[],gp:(a.sections.growthPotential||{}).ratings||[],ps:(a.sections.problemSolving||{}).ratings||[],cc:(a.sections.culture||{}).ratings||[]}):"")
+                RatingsDetail:a.RatingsDetail||(a.sections?JSON.stringify({re:(a.sections.roleEffectiveness||{}).ratings||[],gp:(a.sections.growthPotential||{}).ratings||[],ps:(a.sections.problemSolving||{}).ratings||[],cc:(a.sections.culture||{}).ratings||[]}):""),
+                Projects:a.Projects||(a.projects?JSON.stringify(a.projects):"")
               }));
               api({action:"saveAssessments",assessments:rows})
                 .then(()=>toast("Synced to Excel","Assessment results saved to Excel Online ✓"))
@@ -852,6 +853,10 @@ function rowToAsm(r){
       culture:{ratings:Array.isArray(p.cc)?p.cc:[]}
     };
   }catch(e){} }
+  // Reconstruct project details if present
+  let projects=[];
+  const pj=_pick(r,["Projects","projects"]);
+  if(pj){ try{ const p=(typeof pj==="string")?JSON.parse(pj):pj; if(Array.isArray(p)) projects=p; }catch(e){} }
   const out={
     employeeId:String(_pick(r,["EmployeeId","employeeId","Employee ID"])),
     period:String(_pick(r,["Period","period"])||"90-Day"),
@@ -869,6 +874,7 @@ function rowToAsm(r){
     submittedAt:String(_pick(r,["SubmittedAt","submittedAt"]))
   };
   if(sections) out.sections=sections;
+  if(projects.length) out.projects=projects;
   return out;
 }
 function empToRow(e){
@@ -1512,7 +1518,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:#f0f4f8;color:#0f172a;f
 
 /* Header */
 .form-header{background:linear-gradient(135deg,#0d4f3c 0%,#0a6647 100%);border-radius:16px 16px 0 0;padding:0;overflow:hidden;margin-bottom:0}
-.form-header-top{display:flex;align-items:center;justify-content:space-between;padding:18px 24px 10px}
+.form-header-top{display:flex;align-items:center;justify-content:space-between;padding:20px 24px}
 .form-brand{color:#fff;font-size:18px;font-weight:800;letter-spacing:-.01em}
 .form-brand span{font-size:12px;font-weight:500;color:rgba(255,255,255,.65);display:block;margin-top:1px}
 .form-sub{background:rgba(0,0,0,.2);padding:12px 24px;color:rgba(255,255,255,.9);font-size:12px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;display:flex;align-items:center;justify-content:space-between}
@@ -1572,6 +1578,11 @@ td{border:1px solid #e8edf4;padding:10px 12px;vertical-align:middle}
 
 /* Rating widget */
 .rw{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.pfi{width:100%;padding:6px 9px;border:1px solid #e2e8f0;border-radius:6px;font-size:12.5px;font-family:'Inter',system-ui,sans-serif;color:#334155;background:#fff;outline:none;transition:border .15s}
+.pfi:focus{border-color:#334155;box-shadow:0 0 0 3px rgba(51,65,85,.08)}
+.proj-add{margin:6px 0 4px;background:#f1f5f9;border:1px solid #e2e8f0;color:#334155;border-radius:8px;padding:8px 15px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',system-ui,sans-serif;transition:background .15s}
+.proj-add:hover{background:#e2e8f0}
+.proj-x{background:none;border:none;color:#94a3b8;cursor:pointer;font-size:18px;line-height:1;padding:0}.proj-x:hover{color:#dc2626}
 .rsel{width:100%;padding:8px 11px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:12.5px;font-weight:600;font-family:'Inter',system-ui,sans-serif;color:#334155;background:#fff;cursor:pointer;outline:none;transition:border .15s}
 .rsel:focus{border-color:#334155;box-shadow:0 0 0 3px rgba(51,65,85,.08)}
 .rb{width:34px;height:34px;border-radius:8px;border:2px solid #e2e8f0;background:#fff;font-size:13px;font-weight:800;cursor:pointer;color:#64748b;transition:all .15s;font-family:'Inter',system-ui,sans-serif;flex-shrink:0}
@@ -1618,10 +1629,6 @@ td{border:1px solid #e8edf4;padding:10px 12px;vertical-align:middle}
   <div class="form-header-top">
     <div class="form-brand">90-Day Assessment Form<span>Quality of Hire</span></div>
   </div>
-  <div class="form-sub">
-    <span>90-Day Connect</span>
-    <span>Confidential</span>
-  </div>
 </div>
 
 <!-- ── Employee Info ── -->
@@ -1636,6 +1643,25 @@ td{border:1px solid #e8edf4;padding:10px 12px;vertical-align:middle}
   <div class="emp-field"><div class="emp-lbl">Date of Joining</div><div class="emp-val">${dojStr}</div></div>
   <div class="emp-field"><div class="emp-lbl">Manager / Assessor</div><div class="emp-val">${emp.manager||"—"}</div></div>
 </div>
+
+<!-- ── Project Details ── -->
+<div class="part-title"><span class="part-num" style="background:#334155">&#9632;</span> Project Details</div>
+<div class="tbl-wrap" style="margin-bottom:6px">
+  <table>
+    <thead>
+      <tr>
+        <th>Project Name</th>
+        <th style="width:150px">Start Date</th>
+        <th style="width:150px">End Date</th>
+        <th style="width:150px">PM</th>
+        <th style="width:150px">DD</th>
+        <th style="width:44px"></th>
+      </tr>
+    </thead>
+    <tbody id="projRows"></tbody>
+  </table>
+</div>
+<button type="button" class="proj-add" onclick="addProjectRow()">&#43; Add Project</button>
 
 <!-- ── Part 1: Role Effectiveness (added by recruiter) ── -->
 <div class="part-title"><span class="part-num">1</span> Role Effectiveness</div>
@@ -1763,6 +1789,31 @@ function updateScore(){
 function getVal(key){const h=document.getElementById("rv_"+key);if(!h||!h.value)return null;const n=parseFloat(h.value);return isNaN(n)?null:n;}
 function getValStr(key){const h=document.getElementById("rv_"+key);return h?h.value:"";}
 
+// ── Project Details rows ──────────────────────────────────────────────────
+let _projIdx=0;
+function addProjectRow(){
+  _projIdx++;
+  const tb=document.getElementById("projRows"); if(!tb)return;
+  const tr=document.createElement("tr");
+  tr.innerHTML=`
+    <td><input class="pfi" data-pj="name" placeholder="Project name"></td>
+    <td><input class="pfi" data-pj="start" type="date"></td>
+    <td><input class="pfi" data-pj="end" type="date"></td>
+    <td><input class="pfi" data-pj="pm" placeholder="Project Manager"></td>
+    <td><input class="pfi" data-pj="dd" placeholder="Delivery Director"></td>
+    <td style="text-align:center"><button type="button" class="proj-x" onclick="this.closest('tr').remove()" title="Remove">&#215;</button></td>`;
+  tb.appendChild(tr);
+}
+function collectProjects(){
+  const out=[];
+  document.querySelectorAll("#projRows tr").forEach(r=>{
+    const g=k=>{const el=r.querySelector("[data-pj='"+k+"']");return el?el.value.trim():"";};
+    const p={name:g("name"),start:g("start"),end:g("end"),pm:g("pm"),dd:g("dd")};
+    if(p.name||p.start||p.end||p.pm||p.dd) out.push(p);
+  });
+  return out;
+}
+
 async function submitForm(){
   const errEl=document.getElementById("errMsg");
   errEl.style.display="none";
@@ -1801,13 +1852,14 @@ async function submitForm(){
     SubmittedDate:date,
     OverallRecommendation:recVal,
     Comments:comments,
-    RatingsDetail:JSON.stringify({re:RE_KEYS.map(getValStr),gp:GP_KEYS.map(getValStr),ps:PS_KEYS.map(getValStr),cc:CC_KEYS.map(getValStr)})
+    RatingsDetail:JSON.stringify({re:RE_KEYS.map(getValStr),gp:GP_KEYS.map(getValStr),ps:PS_KEYS.map(getValStr),cc:CC_KEYS.map(getValStr)}),
+    Projects:JSON.stringify(collectProjects())
   };
   // Section-based JSON (used ONLY as a fallback if the backend can't be reached)
   const result={ assessments:[{
     employeeId:"${escJS(emp.id)}", employeeName:"${escJS(emp.name)}", period:"90-Day",
     submittedBy:name, submittedByEmail:email, submittedDate:date,
-    finalScore:finalScore, overallRecommendation:recVal, comments:comments,
+    finalScore:finalScore, overallRecommendation:recVal, comments:comments, projects:collectProjects(),
     sections:{
       roleEffectiveness:{score:Math.round(reScore*100)/100, ratings:RE_KEYS.map(getValStr)},
       growthPotential:{score:Math.round(gpScore*100)/100, ratings:GP_KEYS.map(getVal)},
@@ -1848,6 +1900,9 @@ async function submitForm(){
   btn.textContent="\u2713 Submitted";
   if(hint){ hint.style.color="#b45309"; hint.innerHTML="<strong>Couldn\u2019t reach HR\u2019s system, so a .json file was downloaded instead.</strong> Please email it to HR to import."; }
 }
+
+// Seed one blank project row on load
+addProjectRow();
 <\/script>
 </body>
 </html>`;
@@ -2119,6 +2174,13 @@ function openAssessmentView(empId){
   const note = hasDetail ? "" :
     `<div class="va-note">Question-by-question answers aren't stored for this assessment. They appear automatically once your Excel table has a <strong>RatingsDetail</strong> column (managers' forms already send it). The overall score, recommendation and comments below are always available.</div>`;
 
+  const projects=Array.isArray(a.projects)?a.projects:[];
+  const projHtml = projects.length ? `
+    <div class="va-secttl">Project Details</div>
+    <table class="va-tbl"><thead><tr><th>Project Name</th><th>Start Date</th><th>End Date</th><th>PM</th><th>DD</th></tr></thead><tbody>${
+      projects.map(p=>`<tr><td class="va-area">${esc(p.name||"—")}</td><td>${esc(p.start||"—")}</td><td>${esc(p.end||"—")}</td><td>${esc(p.pm||"—")}</td><td>${esc(p.dd||"—")}</td></tr>`).join("")
+    }</tbody></table>` : "";
+
   body.innerHTML=`
     <div class="va-meta">
       <div><span>Employee</span>${esc(emp.name)} · ${esc(emp.id)}</div>
@@ -2127,6 +2189,7 @@ function openAssessmentView(empId){
       <div><span>QOH Score</span><strong>${a.finalScore||"—"}</strong> &nbsp;<span class="bdg ${ri.c}">${ri.l}</span></div>
     </div>
     ${note}
+    ${projHtml}
     <div class="va-secttl"><span class="part-num2">1</span> Role Effectiveness</div>
     <table class="va-tbl"><thead><tr><th>Assessment Area</th><th>Objective</th><th style="width:150px">Rating</th></tr></thead><tbody>${p1}</tbody></table>
     <div class="va-secttl"><span class="part-num2">2</span> Manager Assessment</div>
