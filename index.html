@@ -2764,7 +2764,6 @@ function submitOnboarding(){
 // ── Compliance: per-recruiter PO completion (HR Admin) ──────────────────────
 function renderCompliance(){
   const main=document.getElementById("main");if(!main)return;
-  const isAdmin=_authUser&&_authUser.role==="admin";
   const groups={};
   // Seed every known recruiter first, so recruiters with no employees still appear
   RECRUITER_ROSTER.forEach(r=>{groups[r]={total:0,done:0,pending:[]};});
@@ -2775,33 +2774,26 @@ function renderCompliance(){
     if((e.performanceObjectives||[]).length) groups[key].done++;
     else groups[key].pending.push(e);
   });
-  let rows=Object.keys(groups).sort().map(r=>{
+  const rows=Object.keys(groups).sort().map(r=>{
     const g=groups[r]; const pct=g.total?Math.round(g.done/g.total*100):0;
     const cls=!g.total?"b-gr":(pct>=100?"b-g":(pct>=50?"b-y":"b-r"));
     return {r,total:g.total,done:g.done,pending:g.total-g.done,pct,cls,pendingList:g.pending};
   });
-  // Recruiters see only their own row
-  if(!isAdmin && _authUser){
-    const me=(_authUser.name||"").toLowerCase();
-    rows=rows.filter(x=>x.r.toLowerCase()===me);
-    if(!rows.length) rows=[{r:_authUser.name,total:0,done:0,pending:0,pct:0,cls:"b-gr",pendingList:[]}];
-  }
-  const scope=isAdmin?EMPS:EMPS.filter(e=>(e.recruiter||"").toLowerCase()===((_authUser&&_authUser.name)||"").toLowerCase());
-  const totEmp=scope.length, totDone=scope.filter(e=>(e.performanceObjectives||[]).length).length;
+  const totEmp=EMPS.length, totDone=EMPS.filter(e=>(e.performanceObjectives||[]).length).length;
   const overall=totEmp?Math.round(totDone/totEmp*100):0;
   main.innerHTML=`
   <div class="ph">
-    <div><div class="ph-t">&#9989; ${isAdmin?"Recruiter Compliance":"My Compliance"}</div>
-    <div class="ph-s">${isAdmin?"Performance-Objective completion for every recruiter, across all onboarded employees.":"Your Performance-Objective completion across employees assigned to you."}</div></div>
+    <div><div class="ph-t">&#9989; Recruiter Compliance</div>
+    <div class="ph-s">Performance-Objective completion for every recruiter, across all onboarded employees.</div></div>
   </div>
   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px">
-    <div class="card" style="padding:18px"><div style="font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.05em">${isAdmin?"Recruiters":"Recruiter"}</div><div style="font-size:26px;font-weight:800;color:#0f172a">${isAdmin?rows.length:1}</div></div>
+    <div class="card" style="padding:18px"><div style="font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.05em">Recruiters</div><div style="font-size:26px;font-weight:800;color:#0f172a">${rows.length}</div></div>
     <div class="card" style="padding:18px"><div style="font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.05em">Employees</div><div style="font-size:26px;font-weight:800;color:#0f172a">${totEmp}</div></div>
     <div class="card" style="padding:18px"><div style="font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.05em">Objectives Added</div><div style="font-size:26px;font-weight:800;color:#059669">${totDone}</div></div>
     <div class="card" style="padding:18px"><div style="font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.05em">Overall Compliance</div><div style="font-size:26px;font-weight:800;color:${overall>=100?"#059669":(overall>=50?"#b45309":"#dc2626")}">${overall}%</div></div>
   </div>
   <div class="card">
-    <div class="chdr"><span class="ct">&#128101; ${isAdmin?"Compliance by Recruiter":"My Objectives Status"}</span>${isAdmin?`<span class="bdg b-gr">${rows.length} recruiter(s)</span>`:""}</div>
+    <div class="chdr"><span class="ct">&#128101; Compliance by Recruiter</span><span class="bdg b-gr">${rows.length} recruiter(s)</span></div>
     <div class="tw"><table><thead><tr><th>Recruiter</th><th style="text-align:center">Employees</th><th style="text-align:center">Objectives Added</th><th style="text-align:center">Pending</th><th style="min-width:180px">Compliance</th><th>Awaiting Objectives</th></tr></thead>
     <tbody>${rows.length?rows.map(x=>`<tr${(_authUser&&x.r.toLowerCase()===(_authUser.name||"").toLowerCase())?' style="background:#fffbeb"':''}>
       <td style="font-weight:700">${escH(x.r)}</td>
