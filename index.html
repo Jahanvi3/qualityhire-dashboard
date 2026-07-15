@@ -466,8 +466,14 @@ window.addEventListener('unhandledrejection', function(e){
     <button class="nb" id="nb-tracker" onclick="showView('tracker')">
       <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>Tracker
     </button>
+    <button class="nb" id="nb-onboarding" onclick="showView('onboarding')">
+      <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="2"/><line x1="16" y1="5" x2="22" y2="5"/></svg>Onboarding
+    </button>
     <button class="nb" id="nb-recruiter" onclick="showView('recruiter')">
       <svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>Recruiter Entry
+    </button>
+    <button class="nb" id="nb-compliance" onclick="showView('compliance')">
+      <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>Compliance
     </button>
     <button class="nb" id="nb-employees" onclick="showView('employees')">
       <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Employees
@@ -905,7 +911,7 @@ function rowToAsm(r){
 function empToRow(e){
   const pjs=Array.isArray(e.projects)?e.projects:[];
   const p0=pjs[0]||{};
-  return {EmployeeId:e.id,Name:e.name,Email:e.email||"",Department:e.department||"",Designation:e.designation||"",DOJ:e.doj||"",Manager:e.manager||"",ManagerEmail:e.managerEmail||"",Mentor:e.mentor||"",Location:e.location||"",EmploymentType:e.employmentType||"Full-time",Recruiter:e.recruiter||"",HiringSource:e.hiringSource||"",Project:p0.name||"",StartDate:p0.start||"",EndDate:p0.end||"",PM:p0.pm||"",DD:p0.dd||"",Allocation:p0.allocation||"",ProjectDetails:JSON.stringify(pjs)};
+  return {EmployeeId:e.id,Name:e.name,Email:e.email||"",Department:e.department||"",Designation:e.designation||"",DOJ:e.doj||"",Manager:e.manager||"",ManagerEmail:e.managerEmail||"",Mentor:e.mentor||"",Location:e.location||"",EmploymentType:e.employmentType||"Full-time",Recruiter:e.recruiter||"",HiringSource:e.hiringSource||"",Project:p0.name||"",StartDate:p0.start||"",EndDate:p0.end||"",PM:p0.pm||"",DD:p0.dd||"",Allocation:p0.allocation||"",POs:JSON.stringify(e.performanceObjectives||[]),ProjectDetails:JSON.stringify(pjs)};
 }
 
 // ── Top banner used for backend status (config missing / fetch failed) ───────
@@ -1040,6 +1046,13 @@ const ADMIN_EMAILS = [
   // Add more HR Admin emails here as needed
 ];
 
+// ── Onboarding team (adds basic employee details only) ──────────────────
+// Add the onboarding team's work emails here. Anyone here (and not an Admin)
+// gets the Onboarding portal. Everyone else is a Recruiter.
+const ONBOARDING_EMAILS = [
+  // "onboarding.person@altudo.co",
+];
+
 // Recruiters (auto-detected — anyone not in the list above):
 //   mercy.monica@altudo.co   · shilpa.gupta@altudo.co
 //   divya.jain@altudo.co     · vikash.choudhary@altudo.co
@@ -1059,10 +1072,12 @@ function doLogin(){
   if(!/.+@.+\..+/.test(email)){_loginErr("Please enter a valid email address.");return;}
 
   const isAdmin=ADMIN_EMAILS.map(e=>e.toLowerCase()).includes(email);
+  const isOnboarding=!isAdmin && ONBOARDING_EMAILS.map(e=>e.toLowerCase()).includes(email);
+  const role=isAdmin?"admin":(isOnboarding?"onboarding":"recruiter");
   const namePart=email.split("@")[0].split(/[._]/).map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ");
   const initials=namePart.split(" ").map(w=>w[0]||"").join("").slice(0,2).toUpperCase();
 
-  _authUser={email,name:namePart,initials,role:isAdmin?"admin":"recruiter"};
+  _authUser={email,name:namePart,initials,role};
 
   // Swap screens
   const ls=document.getElementById("loginScreen"); if(ls)ls.style.display="none";
@@ -1072,14 +1087,19 @@ function doLogin(){
   const av=document.getElementById("sbUserAv");   if(av)av.textContent=initials;
   const nm=document.getElementById("sbUserName"); if(nm)nm.textContent=namePart;
   const em=document.getElementById("sbUserEmail");if(em)em.textContent=email;
-  const rl=document.getElementById("sbUserRole"); if(rl){rl.textContent=isAdmin?"Admin":"Recruiter";rl.className="bdg "+(isAdmin?"b-y":"b-b");}
+  const rl=document.getElementById("sbUserRole"); if(rl){rl.textContent=role==="admin"?"Admin":(role==="onboarding"?"Onboarding":"Recruiter");rl.className="bdg "+(role==="admin"?"b-y":(role==="onboarding"?"b-p":"b-b"));}
 
   _applyRoleNav();
   loadData();
   updateBadge();
 
-  if(isAdmin){
+  if(role==="admin"){
     showView("dashboard");
+  } else if(role==="onboarding"){
+    CV="onboarding";
+    document.querySelectorAll(".nb").forEach(b=>b.classList.remove("active"));
+    const nb=document.getElementById("nb-onboarding");if(nb)nb.classList.add("active");
+    renderOnboarding();
   } else {
     CV="recruiter";
     document.querySelectorAll(".nb").forEach(b=>b.classList.remove("active"));
@@ -1106,8 +1126,9 @@ function doLogout(){
 function _applyRoleNav(){
   if(!_authUser)return;
   const isAdmin=_authUser.role==="admin";
+  const isOnboarding=_authUser.role==="onboarding";
   // Nav items visible only to admins
-  ["nb-dashboard","nb-pending","nb-tracker","nb-employees","nb-reports"].forEach(id=>{
+  ["nb-dashboard","nb-pending","nb-tracker","nb-employees","nb-reports","nb-compliance"].forEach(id=>{
     const el=document.getElementById(id);
     if(el)el.style.display=isAdmin?"flex":"none";
   });
@@ -1116,8 +1137,10 @@ function _applyRoleNav(){
     const el=document.getElementById(id);
     if(el)el.style.display=isAdmin?"":"none";
   });
-  // Recruiter entry is always visible when logged in
-  const rn=document.getElementById("nb-recruiter");if(rn)rn.style.display="flex";
+  // Onboarding: visible to Admin and Onboarding team
+  const on=document.getElementById("nb-onboarding");if(on)on.style.display=(isAdmin||isOnboarding)?"flex":"none";
+  // Recruiter entry: visible to Admin and Recruiters (not the onboarding-only role)
+  const rn=document.getElementById("nb-recruiter");if(rn)rn.style.display=isOnboarding?"none":"flex";
 }
 
 // ── Working-day helpers (Saturdays & Sundays excluded) ──────────────────────
@@ -2234,8 +2257,9 @@ function toast(a,b){document.getElementById("t1").textContent=a;document.getElem
 function closeToast(){document.getElementById("toast").classList.remove("show");}
 
 function showView(v){
-  // Role guard: recruiters can only access the recruiter view
+  // Role guards
   if(_authUser&&_authUser.role==="recruiter"&&v!=="recruiter") return;
+  if(_authUser&&_authUser.role==="onboarding"&&v!=="onboarding") return;
   CV=v;
   document.querySelectorAll(".nb").forEach(b=>b.classList.remove("active"));
   const el=document.getElementById("nb-"+v);if(el)el.classList.add("active");
@@ -2245,7 +2269,7 @@ function renderView(v){
   if(!_authUser) return; // Don't render if not logged in
   Object.values(CH).forEach(c=>{try{c.destroy();}catch(e){}});
   Object.keys(CH).forEach(k=>delete CH[k]);
-  ({dashboard:renderDash,pending:renderPending,tracker:renderTracker,recruiter:renderRecruiter,employees:renderEmps,reports:renderReports}[v]||renderDash)();
+  ({dashboard:renderDash,pending:renderPending,tracker:renderTracker,recruiter:renderRecruiter,onboarding:renderOnboarding,compliance:renderCompliance,employees:renderEmps,reports:renderReports}[v]||renderDash)();
 }
 
 // ── Filter Bar (built with DOM, no string quoting issues) ─────────────────
@@ -2625,6 +2649,7 @@ function renderDash(){
 // ── RECRUITER ENTRY MODULE ────────────────────────────────────────────────────
 let _recPreviewEmp=null;
 let _poRowIdx=0;
+let _editPOsId=null;
 
 const QOH_RATINGS=[
   {v:5,label:"Outstanding Performance",     col:"#059669"},
@@ -2655,9 +2680,126 @@ const QOH_FRAMEWORK=[
   ]}
 ];
 
+// ── Onboarding portal: basic employee details only ──────────────────────────
+function renderOnboarding(){
+  const main=document.getElementById("main");if(!main)return;
+  const list=EMPS.slice().sort((a,b)=>(a.name||"").localeCompare(b.name||""));
+  const lbl='display:block;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px';
+  main.innerHTML=`
+  <div class="ph">
+    <div><div class="ph-t">&#128100; Onboarding Portal</div>
+    <div class="ph-s">Add basic employee details. The assigned recruiter then defines Performance Objectives.</div></div>
+  </div>
+  <div class="card" style="margin-bottom:22px;max-width:760px">
+    <div class="chdr"><span class="ct">&#43; Onboard New Employee</span></div>
+    <div class="cb">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div><label style="${lbl}">Employee Name *</label><input class="fi" id="ob_name" placeholder="e.g. Jahanvi Batra" style="width:100%"></div>
+        <div><label style="${lbl}">Employee ID *</label><input class="fi" id="ob_id" placeholder="e.g. EMP123" style="width:100%"></div>
+        <div><label style="${lbl}">Manager Name</label><input class="fi" id="ob_manager" placeholder="e.g. Ayushi Taneja" style="width:100%"></div>
+        <div><label style="${lbl}">Manager Email</label><input class="fi" id="ob_mgremail" type="email" placeholder="manager@altudo.co" style="width:100%"></div>
+        <div style="grid-column:1/3"><label style="${lbl}">Recruiter Name</label><input class="fi" id="ob_recruiter" placeholder="Recruiter who will add the objectives" style="width:100%"></div>
+      </div>
+      <div id="obErr" style="display:none;margin-top:11px;color:#dc2626;font-size:12.5px"></div>
+      <div style="margin-top:16px"><button class="btn btn-am" onclick="submitOnboarding()" style="padding:10px 22px">&#43; Add Employee</button></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="chdr"><span class="ct">&#128203; Onboarded Employees <span class="bdg b-b" style="margin-left:8px">${list.length}</span></span></div>
+    <div class="tw"><table><thead><tr><th>Employee</th><th>Manager</th><th>Manager Email</th><th>Recruiter</th><th style="text-align:center">Objectives</th></tr></thead>
+    <tbody>${list.length?list.map(e=>{
+      const has=(e.performanceObjectives||[]).length;
+      return `<tr>
+        <td><div style="font-weight:700">${escH(e.name)}</div><div style="font-size:11px;color:#94a3b8">${escH(e.id)}</div></td>
+        <td style="color:#64748b">${escH(e.manager||"-")}</td>
+        <td style="color:#64748b">${escH(e.managerEmail||"-")}</td>
+        <td style="color:#64748b">${escH(e.recruiter||"-")}</td>
+        <td style="text-align:center">${has?`<span class="bdg b-g">${has} added</span>`:`<span class="bdg b-r">Pending</span>`}</td>
+      </tr>`;
+    }).join(""):`<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:24px">No employees onboarded yet.</td></tr>`}</tbody></table></div>
+  </div>`;
+}
+function submitOnboarding(){
+  const g=id=>{const el=document.getElementById(id);return el?el.value.trim():"";};
+  const name=g("ob_name"), id=g("ob_id"), manager=g("ob_manager"), managerEmail=g("ob_mgremail"), recruiter=g("ob_recruiter");
+  const err=document.getElementById("obErr");
+  const setErr=m=>{if(err){err.textContent=m;err.style.display="block";}};
+  if(err)err.style.display="none";
+  if(!name){setErr("Please enter the employee name.");return;}
+  if(!id){setErr("Please enter the employee ID.");return;}
+  if(EMPS.some(e=>String(e.id).toLowerCase()===id.toLowerCase())){setErr("An employee with ID \""+id+"\" already exists.");return;}
+  const emp={id,name,manager,managerEmail,recruiter,hiringSource:"Onboarding",performanceObjectives:[]};
+  EMPS.push(emp);
+  addPendingUpdate(emp);
+  const d=rSt(); d.employees=EMPS; wSt(d);
+  if(apiConfigured()){
+    apiPost({action:"updateEmployee", row:empToRow(emp), id:emp.id, EmployeeId:emp.id, employeeId:emp.id, key:emp.id})
+      .then(()=>{ toast("Employee Onboarded", name+" added — the recruiter can now add objectives."); setTimeout(()=>refreshFromCloud(false),1200); })
+      .catch(e=>{ toast("Saved locally", "Couldn't reach Excel: "+(e.message||e)); });
+  } else {
+    toast("Employee Onboarded", name+" added.");
+  }
+  updateBadge();
+  renderOnboarding();
+}
+
+// ── Compliance: per-recruiter PO completion (HR Admin) ──────────────────────
+function renderCompliance(){
+  const main=document.getElementById("main");if(!main)return;
+  const groups={};
+  EMPS.forEach(e=>{
+    const key=(e.recruiter&&e.recruiter.trim())?e.recruiter.trim():"Unassigned";
+    if(!groups[key])groups[key]={total:0,done:0,pending:[]};
+    groups[key].total++;
+    if((e.performanceObjectives||[]).length) groups[key].done++;
+    else groups[key].pending.push(e);
+  });
+  const rows=Object.keys(groups).sort().map(r=>{
+    const g=groups[r]; const pct=g.total?Math.round(g.done/g.total*100):0;
+    const cls=pct>=100?"b-g":(pct>=50?"b-y":"b-r");
+    return {r,total:g.total,done:g.done,pending:g.total-g.done,pct,cls,pendingList:g.pending};
+  });
+  const totEmp=EMPS.length, totDone=EMPS.filter(e=>(e.performanceObjectives||[]).length).length;
+  const overall=totEmp?Math.round(totDone/totEmp*100):0;
+  main.innerHTML=`
+  <div class="ph">
+    <div><div class="ph-t">&#9989; Recruiter Compliance</div>
+    <div class="ph-s">Performance-Objective completion by recruiter, across all onboarded employees.</div></div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px">
+    <div class="card" style="padding:18px"><div style="font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.05em">Recruiters</div><div style="font-size:26px;font-weight:800;color:#0f172a">${rows.length}</div></div>
+    <div class="card" style="padding:18px"><div style="font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.05em">Employees</div><div style="font-size:26px;font-weight:800;color:#0f172a">${totEmp}</div></div>
+    <div class="card" style="padding:18px"><div style="font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.05em">Objectives Added</div><div style="font-size:26px;font-weight:800;color:#059669">${totDone}</div></div>
+    <div class="card" style="padding:18px"><div style="font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.05em">Overall Compliance</div><div style="font-size:26px;font-weight:800;color:${overall>=100?"#059669":(overall>=50?"#b45309":"#dc2626")}">${overall}%</div></div>
+  </div>
+  <div class="card">
+    <div class="chdr"><span class="ct">&#128101; Compliance by Recruiter</span></div>
+    <div class="tw"><table><thead><tr><th>Recruiter</th><th style="text-align:center">Employees</th><th style="text-align:center">Objectives Added</th><th style="text-align:center">Pending</th><th style="min-width:180px">Compliance</th><th>Awaiting Objectives</th></tr></thead>
+    <tbody>${rows.length?rows.map(x=>`<tr>
+      <td style="font-weight:700">${escH(x.r)}</td>
+      <td style="text-align:center">${x.total}</td>
+      <td style="text-align:center;color:#059669;font-weight:700">${x.done}</td>
+      <td style="text-align:center;color:${x.pending?"#dc2626":"#94a3b8"};font-weight:700">${x.pending}</td>
+      <td><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:8px;background:#eef2f6;border-radius:6px;overflow:hidden"><div style="height:100%;width:${x.pct}%;background:${x.pct>=100?"#059669":(x.pct>=50?"#f59e0b":"#dc2626")}"></div></div><span class="bdg ${x.cls}">${x.pct}%</span></div></td>
+      <td style="color:#64748b;font-size:12px">${x.pendingList.length?x.pendingList.map(e=>escH(e.name)).join(", "):"&#8212;"}</td>
+    </tr>`).join(""):`<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:24px">No employees yet.</td></tr>`}</tbody></table></div>
+  </div>`;
+}
+
 function renderRecruiter(){
   _recPreviewEmp=null;_poRowIdx=0;
   const recEmps=EMPS.filter(e=>e.performanceObjectives&&e.performanceObjectives.length);
+  const pendEmps=EMPS.filter(e=>!(e.performanceObjectives&&e.performanceObjectives.length));
+  const pendCardHtml = pendEmps.length ? `<div class="card" style="margin-bottom:16px;border-left:3px solid #f59e0b">
+    <div class="chdr"><span class="ct">&#9203; Employees Awaiting Objectives <span class="bdg b-y" style="margin-left:8px">${pendEmps.length}</span></span></div>
+    <div class="tw"><table><thead><tr><th>Employee</th><th>Manager</th><th>Recruiter</th><th></th></tr></thead>
+    <tbody>${pendEmps.map(e=>`<tr>
+      <td><div style="font-weight:700">${escH(e.name)}</div><div style="font-size:11px;color:#94a3b8">${escH(e.id)}</div></td>
+      <td style="color:#64748b">${escH(e.manager||"-")}</td>
+      <td style="color:#64748b">${escH(e.recruiter||"-")}</td>
+      <td style="text-align:right"><button class="btn btn-am btn-sm" onclick="startAddPOs('${escH(String(e.id).replace(/'/g,"\\'"))}')">&#43; Add Objectives</button></td>
+    </tr>`).join("")}</tbody></table></div>
+  </div>` : "";
   const main=document.getElementById("main");if(!main)return;
   main.innerHTML=`
   <div class="ph">
@@ -2689,6 +2831,23 @@ function renderRecruiter(){
       <div id="recPreviewZone"></div>
     </div>
   </div>
+  <div class="card" style="margin-bottom:16px;border-top:3px solid #10b981">
+    <div class="chdr"><span class="ct">&#127919; Add Objectives Only <span style="font-size:11.5px;font-weight:500;color:#94a3b8;margin-left:8px">&mdash; updates objectives for already-onboarded employees; no other data is changed</span></span>
+      <button class="btn btn-sec btn-sm" onclick="downloadObjectivesTemplate()">&#8595; Objectives Template</button>
+    </div>
+    <div class="cb">
+      <div class="iz" id="objIz" onclick="document.getElementById('objFileIn').click()"
+           ondragover="event.preventDefault();this.classList.add('dv')"
+           ondragleave="this.classList.remove('dv')"
+           ondrop="event.preventDefault();this.classList.remove('dv');handleObjectivesUpload(event.dataTransfer.files[0])">
+        <svg class="iz-svg" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <div style="font-weight:700;color:#0f172a;margin-bottom:4px">Drop Objectives file here or click to browse</div>
+        <div style="font-size:12px;color:#94a3b8">Columns: Employee ID &middot; Assessment Area &middot; Objective</div>
+      </div>
+      <input type="file" id="objFileIn" accept=".xlsx,.xls" style="display:none" onchange="handleObjectivesUpload(this.files[0])">
+      <div id="objPreviewZone"></div>
+    </div>
+  </div>
   <div class="card" style="margin-bottom:22px">
     <div class="chdr" style="cursor:pointer" onclick="toggleManualRecEntry()">
       <span class="ct">&#9997;&#65039; Manual Entry <span style="font-size:11.5px;font-weight:500;color:#94a3b8;margin-left:8px">— add one employee directly</span></span>
@@ -2696,6 +2855,7 @@ function renderRecruiter(){
     </div>
     <div id="manRecBody" style="display:none" class="cb"><div id="manRecForm"></div></div>
   </div>
+  ${pendCardHtml}
   ${recEmps.length?`<div class="card">
     <div class="chdr"><span class="ct">&#127919; Employees with Performance Objectives <span class="bdg b-g" style="margin-left:8px">${recEmps.length}</span></span></div>
     <div class="tw"><table><thead><tr><th>Employee</th><th>Department</th><th>Designation</th><th>90-Day Date</th><th>Manager</th><th>Recruiter</th><th style="text-align:center">POs</th><th>Performance Objectives</th></tr></thead>
@@ -2786,23 +2946,51 @@ function submitManualRecEntry(){
   const name=v("rn"),id=v("ri"),dept=v("rd"),desig=v("rdes"),doj=v("rdoj"),mgr=v("rm"),mgrEmail=v("rme"),loc=v("rl");
   const msgEl=document.getElementById("manRecMsg");
   const show=msg=>{if(msgEl){msgEl.textContent=msg;msgEl.style.display="inline";}};
-  if(!name||!id||!dept||!desig||!doj||!mgr||!mgrEmail){show("Please fill all required (*) fields.");return;}
-  if(EMPS.find(e=>e.id===id)){show("Employee ID already exists.");return;}
+  if(!name||!id||!dept||!desig||!doj||!mgr||!mgrEmail){
+    if(!(_editPOsId && name)){ show("Please fill all required (*) fields."); return; }
+  }
+  const editId=_editPOsId;
+  const existing=editId?EMPS.find(e=>e.id===editId):(EMPS.find(e=>e.id===id)||null);
+  if(!editId && existing){show("Employee ID already exists.");return;}
   const pos=_collectManualPOs();
   if(!pos.length){show("Add at least one Performance Objective.");return;}
-  const newEmp={id,name,department:dept,designation:desig,doj,manager:mgr,managerEmail:mgrEmail,location:loc,recruiter:(_authUser&&_authUser.name)||"",performanceObjectives:pos};
-  const d=rSt();d.employees=d.employees||[];d.employees.push(newEmp);wSt(d);
-  // Save to local stores (instant, offline-safe)
-  saveRecruiterEmp(newEmp);
-  savePOStore(id, pos);
+  const targetId=editId||id;
+  const base=existing||{};
+  const emp=Object.assign({},base,{id:targetId,name,department:dept,designation:desig,doj,manager:mgr,managerEmail:mgrEmail,location:loc,recruiter:base.recruiter||(_authUser&&_authUser.name)||"",performanceObjectives:pos});
+  const d=rSt();d.employees=d.employees||[];
+  if(d.employees.some(e=>e.id===targetId)) d.employees=d.employees.map(e=>e.id===targetId?emp:e);
+  else d.employees.push(emp);
+  wSt(d);
+  saveRecruiterEmp(emp);
+  savePOStore(targetId, pos);
   loadData();
-  // Push to Excel so it shows on everyone's dashboard
-  pushRecruiterEmpToCloud(newEmp);
-  toast("Employee Added",name+" added with "+pos.length+" Performance Objective(s) ✓");
+  // Onboarded employee already has an Excel row → UPDATE it (avoids a duplicate row); brand-new → add
+  if(editId){
+    if(apiConfigured()) apiPost({action:"updateEmployee", row:empToRow(emp), id:emp.id, EmployeeId:emp.id, employeeId:emp.id, key:emp.id})
+      .then(()=>setTimeout(()=>refreshFromCloud(false),1200)).catch(err=>console.warn("PO sync failed:",err));
+  } else {
+    pushRecruiterEmpToCloud(emp);
+  }
+  toast(editId?"Objectives Added":"Employee Added", name+(editId?" now has ":" added with ")+pos.length+" Performance Objective(s) \u2713");
+  _editPOsId=null;
   clearManualRecEntry();renderRecruiter();
 }
 
+function startAddPOs(empId){
+  const e=EMPS.find(x=>String(x.id)===String(empId)); if(!e)return;
+  _editPOsId=e.id;
+  const body=document.getElementById("manRecBody");
+  if(body && body.style.display==="none") toggleManualRecEntry();
+  const set=(id,val)=>{const el=document.getElementById(id); if(el)el.value=val||"";};
+  set("rn",e.name); set("ri",e.id); set("rd",e.department); set("rdes",e.designation);
+  set("rdoj",e.doj); set("rm",e.manager); set("rme",e.managerEmail); set("rl",e.location);
+  const m=document.getElementById("manRecMsg"); if(m)m.style.display="none";
+  const f=document.getElementById("manRecForm"); if(f)f.scrollIntoView({behavior:"smooth",block:"center"});
+  toast("Adding Objectives","Details pre-filled for "+e.name+". Add the objectives below and Save.");
+}
+
 function clearManualRecEntry(){
+  _editPOsId=null;
   ["rn","ri","rd","rdes","rdoj","rm","rme","rl"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
   const c=document.getElementById("manPORows");if(c)c.innerHTML="";
   _poRowIdx=0;addManualPORow();addManualPORow();
@@ -2992,6 +3180,101 @@ function confirmRecruiterUpload(){
   // Push to Excel so it shows on everyone's dashboard
   pushRecruiterEmpToCloud(emp);
   toast("Employee Added",emp.name+" added with "+(emp.performanceObjectives||[]).length+" PO(s) ✓");
+  renderRecruiter();
+}
+
+// ── Objectives-Only upload: updates ONLY objectives on existing employees ────
+let _objPreview=null;
+function downloadObjectivesTemplate(){
+  const wb=XLSX.utils.book_new();
+  const pend=EMPS.filter(e=>!(e.performanceObjectives&&e.performanceObjectives.length));
+  const rows=[
+    ["OBJECTIVES UPLOAD \u2014 updates objectives only. Employee basic details are owned by the Onboarding team and will NOT be changed."],
+    ["Fill one row per objective. Repeat the Employee ID for multiple objectives on the same person."],
+    [],
+    ["Employee ID","Assessment Area","Objective"]
+  ];
+  if(pend.length) pend.forEach(e=>rows.push([e.id,"",""]));
+  else rows.push(["EMP123","",""]);
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  ws["!cols"]=[{wch:16},{wch:28},{wch:72}];
+  ws["!merges"]=[{s:{r:0,c:0},e:{r:0,c:2}},{s:{r:1,c:0},e:{r:1,c:2}}];
+  XLSX.utils.book_append_sheet(wb,ws,"Objectives");
+  XLSX.writeFile(wb,"QOH_Objectives_Template_"+new Date().toISOString().slice(0,10)+".xlsx");
+}
+function handleObjectivesUpload(file){
+  if(!file)return;
+  if(!/\.xlsx?$/i.test(file.name)){toast("Wrong Format","Please upload an .xlsx file");return;}
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const wb=XLSX.read(e.target.result,{type:"binary"});
+      const ws=wb.Sheets["Objectives"]||wb.Sheets[wb.SheetNames[0]];
+      if(!ws){_showObjErr("No sheet found. Please use the Objectives template.");return;}
+      const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:""});
+      const byId={};
+      rows.forEach(r=>{
+        const id=String(r[0]||"").trim();
+        const area=String(r[1]||"").trim();
+        const obj=String(r[2]||"").trim();
+        const up=v=>String(v).toUpperCase();
+        if(!id||up(id)==="EMPLOYEE ID"||!obj||up(obj)==="OBJECTIVE")return;
+        if(!byId[id])byId[id]=[];
+        byId[id].push({category:"Role Effectiveness",subCategory:area||("PO "+(byId[id].length+1)),objective:obj,notes:""});
+      });
+      const ids=Object.keys(byId);
+      if(!ids.length){_showObjErr("No objectives found. Fill in Employee ID + Objective rows.");return;}
+      const matched=[],unmatched=[];
+      ids.forEach(id=>{
+        const emp=EMPS.find(e=>String(e.id).toLowerCase()===id.toLowerCase());
+        if(emp)matched.push({emp,pos:byId[id]});else unmatched.push(id);
+      });
+      if(!matched.length){_showObjErr("None of the Employee IDs match onboarded employees. Objectives can only be added to employees already onboarded.");return;}
+      _objPreview={matched,unmatched};
+      _showObjPreview();
+    }catch(err){_showObjErr("Could not read file: "+(err.message||"unknown error"));}
+  };
+  reader.readAsBinaryString(file);
+}
+function _showObjErr(msg){const z=document.getElementById("objPreviewZone");if(z)z.innerHTML=`<div style="background:#fee2e2;border:1.5px solid #fecaca;border-radius:10px;padding:14px;margin-top:12px;color:#dc2626;font-size:13px"><strong>&#9888; Error:</strong> ${msg}</div>`;}
+function _showObjPreview(){
+  const z=document.getElementById("objPreviewZone");if(!z||!_objPreview)return;
+  const m=_objPreview.matched,u=_objPreview.unmatched;
+  z.innerHTML=`<div style="border:1.5px solid #bbf7d0;border-radius:13px;overflow:hidden;margin-top:14px">
+    <div style="background:#d1fae5;padding:12px 18px;font-weight:700;font-size:13.5px;color:#065f46">&#10003; ${m.length} employee(s) matched &mdash; only objectives will be updated</div>
+    <div style="padding:18px;background:#fff">
+      ${u.length?`<div style="background:#fef3c7;border:1.5px solid #fde68a;border-radius:9px;padding:10px 14px;font-size:12.5px;color:#92400e;margin-bottom:14px"><strong>&#9888; Skipped (not onboarded):</strong> ${u.map(escH).join(", ")}</div>`:""}
+      ${m.map(x=>`<div style="margin-bottom:14px">
+        <div style="font-weight:700;font-size:13px;margin-bottom:6px">${escH(x.emp.name)} <span style="font-size:11px;color:#94a3b8">${escH(x.emp.id)}</span> <span class="bdg b-b" style="margin-left:6px">${x.pos.length} objective(s)</span></div>
+        <div class="tw"><table><thead><tr><th style="width:40px">#</th><th>Assessment Area</th><th>Objective</th></tr></thead>
+        <tbody>${x.pos.map((p,i)=>`<tr><td style="color:#94a3b8;font-weight:800">${i+1}</td><td>${escH(p.subCategory)}</td><td>${escH(p.objective)}</td></tr>`).join("")}</tbody></table></div>
+      </div>`).join("")}
+      <div style="display:flex;gap:10px;margin-top:6px">
+        <button class="btn btn-am" onclick="confirmObjectivesUpload()">&#10003; Update Objectives</button>
+        <button class="btn btn-ghost" onclick="document.getElementById('objPreviewZone').innerHTML='';document.getElementById('objFileIn').value='';_objPreview=null">&#215; Cancel</button>
+      </div>
+    </div>
+  </div>`;
+}
+function confirmObjectivesUpload(){
+  if(!_objPreview||!_objPreview.matched.length){toast("Nothing to update","Upload a file first");return;}
+  const d=rSt();d.employees=d.employees||[];
+  let n=0;
+  _objPreview.matched.forEach(x=>{
+    const updated=Object.assign({},x.emp,{performanceObjectives:x.pos});
+    EMPS=EMPS.map(e=>e.id===x.emp.id?updated:e);
+    const idx=d.employees.findIndex(e=>e.id===x.emp.id);
+    if(idx>=0)d.employees[idx]=updated;else d.employees.push(updated);
+    saveRecruiterEmp(updated);
+    savePOStore(updated.id,x.pos);
+    if(apiConfigured()) apiPost({action:"updateEmployee", row:empToRow(updated), id:updated.id, EmployeeId:updated.id, employeeId:updated.id, key:updated.id}).catch(err=>console.warn("Objectives sync failed:",err));
+    n++;
+  });
+  wSt(d);
+  loadData();
+  _objPreview=null;
+  if(apiConfigured()) setTimeout(()=>refreshFromCloud(false),1500);
+  toast("Objectives Updated", n+" employee(s) updated \u2014 objectives only, no other data changed \u2713");
   renderRecruiter();
 }
 
