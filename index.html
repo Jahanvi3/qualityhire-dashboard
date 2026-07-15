@@ -1053,11 +1053,27 @@ const ONBOARDING_EMAILS = [
   // "onboarding.person@altudo.co",
 ];
 
-// Recruiters (auto-detected — anyone not in the list above):
-//   mercy.monica@altudo.co   · shilpa.gupta@altudo.co
-//   divya.jain@altudo.co     · vikash.choudhary@altudo.co
-//   piyush.vaishnav@altudo.co· harmeet.singh@altudo.co
-//   tej.mishra@altudo.co     · richa.dubey@altudo.co
+// ── Recruiter roster ────────────────────────────────────────────────────
+// Anyone not in ADMIN_EMAILS / ONBOARDING_EMAILS is treated as a Recruiter on
+// login. This roster exists so the Compliance view can list EVERY recruiter —
+// including those who currently have no employees assigned (0% / nothing to do).
+// Add or remove recruiter emails here as the team changes.
+const RECRUITER_EMAILS = [
+  "mercy.monica@altudo.co",
+  "shilpa.gupta@altudo.co",
+  "divya.jain@altudo.co",
+  "vikash.choudhary@altudo.co",
+  "piyush.vaishnav@altudo.co",
+  "harmeet.singh@altudo.co",
+  "tej.mishra@altudo.co",
+  "richa.dubey@altudo.co"
+];
+// "priya.sharma@altudo.co" → "Priya Sharma" (matches how login derives names)
+function _nameFromEmail(em){
+  return String(em||"").split("@")[0].split(/[._]/).filter(Boolean)
+    .map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ");
+}
+const RECRUITER_ROSTER = RECRUITER_EMAILS.map(_nameFromEmail);
 
 let _authUser = null; // { email, name, initials, role: "admin"|"recruiter" }
 
@@ -1128,7 +1144,7 @@ function _applyRoleNav(){
   const isAdmin=_authUser.role==="admin";
   const isOnboarding=_authUser.role==="onboarding";
   // Nav items visible only to admins
-  ["nb-dashboard","nb-pending","nb-tracker","nb-employees","nb-reports","nb-compliance"].forEach(id=>{
+  ["nb-dashboard","nb-pending","nb-tracker","nb-employees","nb-reports"].forEach(id=>{
     const el=document.getElementById(id);
     if(el)el.style.display=isAdmin?"flex":"none";
   });
@@ -1139,6 +1155,8 @@ function _applyRoleNav(){
   });
   // Onboarding: visible to Admin and Onboarding team
   const on=document.getElementById("nb-onboarding");if(on)on.style.display=(isAdmin||isOnboarding)?"flex":"none";
+  // Compliance: Admins see every recruiter; Recruiters see their own
+  const cp=document.getElementById("nb-compliance");if(cp)cp.style.display=isOnboarding?"none":"flex";
   // Recruiter entry: visible to Admin and Recruiters (not the onboarding-only role)
   const rn=document.getElementById("nb-recruiter");if(rn)rn.style.display=isOnboarding?"none":"flex";
 }
@@ -2258,7 +2276,7 @@ function closeToast(){document.getElementById("toast").classList.remove("show");
 
 function showView(v){
   // Role guards
-  if(_authUser&&_authUser.role==="recruiter"&&v!=="recruiter") return;
+  if(_authUser&&_authUser.role==="recruiter"&&v!=="recruiter"&&v!=="compliance") return;
   if(_authUser&&_authUser.role==="onboarding"&&v!=="onboarding") return;
   CV=v;
   document.querySelectorAll(".nb").forEach(b=>b.classList.remove("active"));
@@ -2746,7 +2764,10 @@ function submitOnboarding(){
 // ── Compliance: per-recruiter PO completion (HR Admin) ──────────────────────
 function renderCompliance(){
   const main=document.getElementById("main");if(!main)return;
+  const isAdmin=_authUser&&_authUser.role==="admin";
   const groups={};
+  // Seed every known recruiter first, so recruiters with no employees still appear
+  RECRUITER_ROSTER.forEach(r=>{groups[r]={total:0,done:0,pending:[]};});
   EMPS.forEach(e=>{
     const key=(e.recruiter&&e.recruiter.trim())?e.recruiter.trim():"Unassigned";
     if(!groups[key])groups[key]={total:0,done:0,pending:[]};
@@ -2754,35 +2775,42 @@ function renderCompliance(){
     if((e.performanceObjectives||[]).length) groups[key].done++;
     else groups[key].pending.push(e);
   });
-  const rows=Object.keys(groups).sort().map(r=>{
+  let rows=Object.keys(groups).sort().map(r=>{
     const g=groups[r]; const pct=g.total?Math.round(g.done/g.total*100):0;
-    const cls=pct>=100?"b-g":(pct>=50?"b-y":"b-r");
+    const cls=!g.total?"b-gr":(pct>=100?"b-g":(pct>=50?"b-y":"b-r"));
     return {r,total:g.total,done:g.done,pending:g.total-g.done,pct,cls,pendingList:g.pending};
   });
-  const totEmp=EMPS.length, totDone=EMPS.filter(e=>(e.performanceObjectives||[]).length).length;
+  // Recruiters see only their own row
+  if(!isAdmin && _authUser){
+    const me=(_authUser.name||"").toLowerCase();
+    rows=rows.filter(x=>x.r.toLowerCase()===me);
+    if(!rows.length) rows=[{r:_authUser.name,total:0,done:0,pending:0,pct:0,cls:"b-gr",pendingList:[]}];
+  }
+  const scope=isAdmin?EMPS:EMPS.filter(e=>(e.recruiter||"").toLowerCase()===((_authUser&&_authUser.name)||"").toLowerCase());
+  const totEmp=scope.length, totDone=scope.filter(e=>(e.performanceObjectives||[]).length).length;
   const overall=totEmp?Math.round(totDone/totEmp*100):0;
   main.innerHTML=`
   <div class="ph">
-    <div><div class="ph-t">&#9989; Recruiter Compliance</div>
-    <div class="ph-s">Performance-Objective completion by recruiter, across all onboarded employees.</div></div>
+    <div><div class="ph-t">&#9989; ${isAdmin?"Recruiter Compliance":"My Compliance"}</div>
+    <div class="ph-s">${isAdmin?"Performance-Objective completion for every recruiter, across all onboarded employees.":"Your Performance-Objective completion across employees assigned to you."}</div></div>
   </div>
   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px">
-    <div class="card" style="padding:18px"><div style="font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.05em">Recruiters</div><div style="font-size:26px;font-weight:800;color:#0f172a">${rows.length}</div></div>
+    <div class="card" style="padding:18px"><div style="font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.05em">${isAdmin?"Recruiters":"Recruiter"}</div><div style="font-size:26px;font-weight:800;color:#0f172a">${isAdmin?rows.length:1}</div></div>
     <div class="card" style="padding:18px"><div style="font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.05em">Employees</div><div style="font-size:26px;font-weight:800;color:#0f172a">${totEmp}</div></div>
     <div class="card" style="padding:18px"><div style="font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.05em">Objectives Added</div><div style="font-size:26px;font-weight:800;color:#059669">${totDone}</div></div>
     <div class="card" style="padding:18px"><div style="font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.05em">Overall Compliance</div><div style="font-size:26px;font-weight:800;color:${overall>=100?"#059669":(overall>=50?"#b45309":"#dc2626")}">${overall}%</div></div>
   </div>
   <div class="card">
-    <div class="chdr"><span class="ct">&#128101; Compliance by Recruiter</span></div>
+    <div class="chdr"><span class="ct">&#128101; ${isAdmin?"Compliance by Recruiter":"My Objectives Status"}</span>${isAdmin?`<span class="bdg b-gr">${rows.length} recruiter(s)</span>`:""}</div>
     <div class="tw"><table><thead><tr><th>Recruiter</th><th style="text-align:center">Employees</th><th style="text-align:center">Objectives Added</th><th style="text-align:center">Pending</th><th style="min-width:180px">Compliance</th><th>Awaiting Objectives</th></tr></thead>
-    <tbody>${rows.length?rows.map(x=>`<tr>
+    <tbody>${rows.length?rows.map(x=>`<tr${(_authUser&&x.r.toLowerCase()===(_authUser.name||"").toLowerCase())?' style="background:#fffbeb"':''}>
       <td style="font-weight:700">${escH(x.r)}</td>
       <td style="text-align:center">${x.total}</td>
       <td style="text-align:center;color:#059669;font-weight:700">${x.done}</td>
       <td style="text-align:center;color:${x.pending?"#dc2626":"#94a3b8"};font-weight:700">${x.pending}</td>
-      <td><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:8px;background:#eef2f6;border-radius:6px;overflow:hidden"><div style="height:100%;width:${x.pct}%;background:${x.pct>=100?"#059669":(x.pct>=50?"#f59e0b":"#dc2626")}"></div></div><span class="bdg ${x.cls}">${x.pct}%</span></div></td>
+      <td>${x.total?`<div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:8px;background:#eef2f6;border-radius:6px;overflow:hidden"><div style="height:100%;width:${x.pct}%;background:${x.pct>=100?"#059669":(x.pct>=50?"#f59e0b":"#dc2626")}"></div></div><span class="bdg ${x.cls}">${x.pct}%</span></div>`:`<span class="bdg b-gr">No employees assigned</span>`}</td>
       <td style="color:#64748b;font-size:12px">${x.pendingList.length?x.pendingList.map(e=>escH(e.name)).join(", "):"&#8212;"}</td>
-    </tr>`).join(""):`<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:24px">No employees yet.</td></tr>`}</tbody></table></div>
+    </tr>`).join(""):`<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:24px">No recruiters found.</td></tr>`}</tbody></table></div>
   </div>`;
 }
 
