@@ -2751,7 +2751,14 @@ function submitOnboarding(){
   addPendingUpdate(emp);
   const d=rSt(); d.employees=EMPS; wSt(d);
   if(apiConfigured()){
-    apiPost({action:"updateEmployee", row:empToRow(emp), id:emp.id, EmployeeId:emp.id, employeeId:emp.id, key:emp.id})
+    // A newly onboarded employee has no row in Excel yet, so this must be
+    // "saveEmployee" (Case 4 -> Add a row). Sending "updateEmployee" routes to
+    // Case 5 -> Update a row, which errors because the row doesn't exist yet —
+    // the flow then never reaches its Response and the caller sees an HTTP 502.
+    // Fields are sent BOTH flat and nested so the flow finds them whether its
+    // Parse JSON / Add-a-row step reads Body EmployeeId or Body employee.
+    const obRow = empToRow(emp);
+    apiPost(Object.assign({action:"saveEmployee", employee:obRow, row:obRow, id:emp.id, key:emp.id}, obRow))
       .then(()=>{ toast("Employee Onboarded", name+" added — the recruiter can now add objectives."); setTimeout(()=>refreshFromCloud(false),1200); })
       .catch(e=>{ toast("Saved locally", "Couldn't reach Excel: "+(e.message||e)); });
   } else {
@@ -3313,7 +3320,11 @@ function pushRecruiterEmpToCloud(emp){
     HiringSource:emp.hiringSource||"Recruiter Entry",
     POs:JSON.stringify(emp.performanceObjectives||[])
   };
-  api({action:"saveEmployee",employee:row})
+  // Send the columns at the ROOT of the body as well as nested under "employee".
+  // The "Add a row into a table 1" step maps from Body EmployeeId / Body Name /
+  // etc. (root level), so a body that only nests them under "employee" writes a
+  // row of blanks. Same Object.assign trick already used by saveAssessments.
+  api(Object.assign({action:"saveEmployee", employee:row, row:row, id:emp.id||"", key:emp.id||""}, row))
     .then(()=>toast("Synced to Excel",emp.name+" saved — now visible to everyone ✓"))
     .catch(err=>{console.warn("Could not push employee to Excel:",err);
       toast("Saved Locally",emp.name+" saved on this device. Excel sync failed — check connection.");});
