@@ -2169,6 +2169,13 @@ function rI(s){if(s>=4.5)return{l:"Exceptional",c:"b-p"};if(s>=3.5)return{l:"Str
 
 // ── Completed-assessment viewer (mirrors the manager form) ──────────────────
 const ASSESS_MEANING={1:"Under Performance",2:"Partially Meets Expectations",3:"Meets Expectations",4:"Exceeds Expectations",5:"Outstanding Performance"};
+let VIEW_ASM_EMPID=null; // employee whose assessment is open in the viewer (used by Download PDF)
+const ASSESS_WEIGHTS=[
+  {key:"roleEffectiveness", label:"Role Effectiveness (Performance Objectives)", w:0.40},
+  {key:"growthPotential",   label:"Growth Potential & Learning Ability",         w:0.20},
+  {key:"problemSolving",    label:"Problem Solving & Ownership",                 w:0.20},
+  {key:"culture",           label:"Culture & Collaboration",                     w:0.20}
+];
 const ASSESS_SECTIONS=[
   {key:"growthPotential", cat:"Growth Potential & Learning Ability", areas:[
     {area:"Learning Ability", q:"How quickly has the Altudian become productive, and how effectively do they incorporate feedback and learning into their work?"},
@@ -2191,7 +2198,10 @@ function openAssessmentView(empId){
   const titleEl=document.getElementById("viewAsmTitle");
   const esc=s=>String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
   titleEl.textContent="90-Day Assessment — "+emp.name;
-  if(!a){ body.innerHTML='<p style="color:var(--ink3)">No submitted assessment found for this employee.</p>'; ov.classList.add("open"); return; }
+  VIEW_ASM_EMPID=empId;
+  const pdfBtn=document.getElementById("viewAsmPdfBtn");
+  if(!a){ if(pdfBtn)pdfBtn.style.display="none"; body.innerHTML='<p style="color:var(--ink3)">No submitted assessment found for this employee.</p>'; ov.classList.add("open"); return; }
+  if(pdfBtn)pdfBtn.style.display="";
   const ri=rI(a.finalScore||0);
   const sec=a.sections||{};
   const meaning=v=>{
@@ -2232,6 +2242,8 @@ function openAssessmentView(empId){
       <div><span>QOH Score</span><strong>${a.finalScore||"—"}</strong> &nbsp;<span class="bdg ${ri.c}">${ri.l}</span></div>
     </div>
     ${note}
+    ${asmScoreBreakdownHtml(a)}
+    ${asmScaleLegendHtml()}
     ${projHtml}
     <div class="va-secttl"><span class="part-num2">1</span> Role Effectiveness</div>
     <table class="va-tbl"><thead><tr><th>Assessment Area</th><th>Objective</th><th style="width:150px">Rating</th></tr></thead><tbody>${p1}</tbody></table>
@@ -2244,6 +2256,358 @@ function openAssessmentView(empId){
   ov.classList.add("open");
 }
 function closeAssessmentView(){ document.getElementById("viewAsmOverlay").classList.remove("open"); }
+
+// ── Weighted score breakdown + rating scale (shared by viewer modal & PDF) ──
+function asmSectionAvg(secObj){
+  const rr=(secObj&&Array.isArray(secObj.ratings))?secObj.ratings:[];
+  const nums=rr.map(v=>parseFloat(v)).filter(n=>!isNaN(n)&&n>=1&&n<=5);
+  if(nums.length) return nums.reduce((a,b)=>a+b,0)/nums.length;
+  if(secObj&&typeof secObj.score==="number"&&secObj.score>0) return secObj.score;
+  return null;
+}
+function asmBreakdown(a){
+  const sec=(a&&a.sections)||{};
+  const rows=ASSESS_WEIGHTS.map(s=>{
+    const avg=asmSectionAvg(sec[s.key]);
+    return {label:s.label,w:s.w,avg,weighted:(avg!==null?avg*s.w:null)};
+  });
+  const complete=rows.every(r=>r.avg!==null);
+  const computed=complete?rows.reduce((t,r)=>t+r.weighted,0):null;
+  return {rows,complete,computed,stored:(a&&a.finalScore)||0};
+}
+function asmScoreBreakdownHtml(a){
+  const bd=asmBreakdown(a);
+  const fmt=v=>v===null?'<span style="color:#94a3b8">—</span>':v.toFixed(2);
+  const finalShown=(bd.computed!==null?bd.computed:bd.stored)||0;
+  const ri2=rI(finalShown);
+  const rows=bd.rows.map(r=>`<tr><td class="va-area">${r.label}</td><td style="text-align:center">${fmt(r.avg)}</td><td style="text-align:center">${Math.round(r.w*100)}%</td><td class="va-r" style="text-align:center">${fmt(r.weighted)}</td></tr>`).join("");
+  const noteRow=bd.complete?"":`<tr><td colspan="4" style="color:#94a3b8;font-size:11.5px">Per-question ratings are not stored for one or more sections, so section averages can't be recomputed — the submitted final score is shown below.</td></tr>`;
+  return `
+    <div class="va-secttl">Score Breakdown (Weighted)</div>
+    <table class="va-tbl"><thead><tr><th>Section</th><th style="text-align:center;width:110px">Avg (1–5)</th><th style="text-align:center;width:90px">Weight</th><th style="text-align:center;width:120px">Weighted</th></tr></thead>
+    <tbody>${rows}${noteRow}
+    <tr style="background:#f0fdf4"><td class="va-area" style="color:#0d4f3c">Final QOH Score &nbsp;<span style="font-weight:600;color:#64748b;font-size:11px">= (RE × 40%) + (GP × 20%) + (PS × 20%) + (CC × 20%)</span></td><td></td><td></td><td class="va-r" style="text-align:center;font-size:14px">${Number(finalShown).toFixed(2)} <span class="bdg ${ri2.c}" style="margin-left:4px">${ri2.l}</span></td></tr>
+    </tbody></table>`;
+}
+function asmScaleLegendHtml(){
+  const rows=[5,4,3,2,1].map(n=>`<tr><td class="va-r" style="width:60px;text-align:center">${n}</td><td class="va-q">${ASSESS_MEANING[n]}</td></tr>`).join("")
+    +`<tr><td class="va-r" style="text-align:center">ND</td><td class="va-q">Not Demonstrated Yet</td></tr>`;
+  return `
+    <div class="va-secttl">Rating Scale</div>
+    <table class="va-tbl"><thead><tr><th style="text-align:center">Rating</th><th>Meaning</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+// ── Download a completed assessment as PDF ─────────────────────────────────
+// Builds a print-quality standalone report (all questions, answers, rating
+// scale, section weighted averages and the final QOH score), then saves it as
+// a real .pdf via html2pdf.js (CDN). If the library can't be loaded (offline),
+// it opens the same report in a print window so it can be saved as PDF there.
+function buildAssessmentReport(emp,a){
+  const esc=s=>String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  const sec=a.sections||{};
+  const meaning=v=>{
+    if(v==="nd"||v==="ND"||v==="Not Demonstrated Yet") return "Not Demonstrated Yet";
+    const n=parseInt(v);
+    return (n>=1&&n<=5)?(n+" — "+ASSESS_MEANING[n]):"Not rated";
+  };
+  const bd=asmBreakdown(a);
+  const finalShown=(bd.computed!==null?bd.computed:bd.stored)||0;
+  const ri2=rI(finalShown);
+  const fmt=v=>v===null?"—":v.toFixed(2);
+
+  const pos=(emp.performanceObjectives||[]);
+  const reR=(sec.roleEffectiveness&&sec.roleEffectiveness.ratings)||[];
+  const p1 = pos.length
+    ? pos.map((po,i)=>`<tr><td class="ra">${esc(po.subCategory||("Performance Objective "+(i+1)))}</td><td class="rq">${esc(po.objective||po.subCategory||"")}</td><td class="rr">${esc(meaning(reR[i]))}</td></tr>`).join("")
+    : `<tr><td colspan="3" class="rq" style="color:#94a3b8">No performance objectives were defined for this employee.</td></tr>`;
+
+  const p2 = ASSESS_SECTIONS.map(s=>{
+    const rr=(sec[s.key]&&sec[s.key].ratings)||[];
+    const rows=s.areas.map((ar,i)=>`<tr><td class="ra">${esc(ar.area)}</td><td class="rq">${esc(ar.q)}</td><td class="rr">${esc(meaning(rr[i]))}</td></tr>`).join("");
+    return `<tr class="cat"><td colspan="3">${esc(s.cat)}</td></tr>${rows}`;
+  }).join("");
+
+  const bdRows=bd.rows.map(r=>`<tr><td class="ra">${esc(r.label)}</td><td class="ctr">${fmt(r.avg)}</td><td class="ctr">${Math.round(r.w*100)}%</td><td class="ctr rr">${fmt(r.weighted)}</td></tr>`).join("");
+  const bdNote=bd.complete?"":`<tr><td colspan="4" class="rq" style="color:#94a3b8;font-size:9.5pt">Per-question ratings are not stored for one or more sections, so section averages can't be recomputed — the submitted final score is shown.</td></tr>`;
+
+  const scaleRows=[5,4,3,2,1].map(n=>`<tr><td class="ctr rr" style="width:56px">${n}</td><td class="rq">${ASSESS_MEANING[n]}</td></tr>`).join("")
+    +`<tr><td class="ctr rr">ND</td><td class="rq">Not Demonstrated Yet</td></tr>`;
+
+  const projects=Array.isArray(emp.projects)?emp.projects:[];
+  const projHtml=projects.length?`
+    <div class="sttl">Project Details</div>
+    <table><thead><tr><th>Project Name</th><th>Start Date</th><th>End Date</th><th>PM</th><th>DD</th><th>Allocation</th></tr></thead><tbody>${
+      projects.map(p=>`<tr><td class="ra">${esc(p.name||"—")}</td><td>${esc(p.start||"—")}</td><td>${esc(p.end||"—")}</td><td>${esc(p.pm||"—")}</td><td>${esc(p.dd||"—")}</td><td>${p.allocation?esc(String(p.allocation))+"%":"—"}</td></tr>`).join("")
+    }</tbody></table>`:"";
+
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>90-Day Assessment — ${esc(emp.name)}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Segoe UI',Arial,Helvetica,sans-serif;color:#0f172a;font-size:10.5pt;line-height:1.45;padding:26px 30px;background:#fff}
+    .hdr{display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #0d4f3c;padding-bottom:12px;margin-bottom:14px}
+    .hdr h1{font-size:16pt;color:#0d4f3c}
+    .hdr .sub{font-size:9.5pt;color:#64748b;margin-top:2px}
+    .scorebox{text-align:right}
+    .scorebox .v{font-size:20pt;font-weight:800;color:#0d4f3c}
+    .scorebox .b{display:inline-block;padding:2px 12px;border-radius:14px;font-size:9pt;font-weight:700;background:#d1fae5;color:#065f46}
+    .meta{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px 20px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 14px;margin-bottom:14px}
+    .meta .l{font-size:7.5pt;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8}
+    .meta .v{font-size:10pt;font-weight:600}
+    .sttl{font-size:11pt;font-weight:800;color:#0d4f3c;margin:16px 0 6px;border-left:4px solid #f59e0b;padding-left:8px;page-break-after:avoid}
+    table{width:100%;border-collapse:collapse;font-size:9.5pt;margin-bottom:6px}
+    th{background:#0d4f3c;color:#fff;text-align:left;padding:6px 9px;font-size:8pt;text-transform:uppercase;letter-spacing:.05em}
+    td{padding:6px 9px;border-bottom:1px solid #e8edf3;vertical-align:top}
+    tr{page-break-inside:avoid}
+    tr.cat td{background:#f1f5f9;font-weight:800;color:#334155;font-size:8.5pt;text-transform:uppercase;letter-spacing:.04em}
+    .ra{font-weight:700;width:26%}
+    .rq{color:#475569}
+    .rr{font-weight:700;color:#0d4f3c;white-space:nowrap;width:180px}
+    .ctr{text-align:center}
+    tr.total td{background:#f0fdf4;font-weight:800;color:#0d4f3c;border-top:2px solid #0d4f3c}
+    .box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:9px 13px;white-space:pre-wrap;margin-bottom:6px}
+    .formula{font-size:8.5pt;color:#64748b;margin:2px 0 8px}
+    .foot{margin-top:18px;padding-top:8px;border-top:1px solid #e2e8f0;font-size:8pt;color:#94a3b8;display:flex;justify-content:space-between}
+    @page{size:A4;margin:12mm}
+    @media print{body{padding:0}}
+  </style></head><body>
+    <div class="hdr">
+      <div>
+        <h1>QualityHire — 90-Day Quality of Hire Assessment</h1>
+        <div class="sub">Completed manager evaluation · ${esc(emp.name)} (${esc(emp.id)})</div>
+      </div>
+      <div class="scorebox">
+        <div class="v">${Number(finalShown).toFixed(2)} / 5</div>
+        <span class="b">${esc(ri2.l)}</span>
+      </div>
+    </div>
+    <div class="meta">
+      <div><div class="l">Employee</div><div class="v">${esc(emp.name)}</div></div>
+      <div><div class="l">Employee ID</div><div class="v">${esc(emp.id)}</div></div>
+      <div><div class="l">Designation</div><div class="v">${esc(emp.designation||"—")}</div></div>
+      <div><div class="l">Department</div><div class="v">${esc(emp.department||"—")}</div></div>
+      <div><div class="l">Date of Joining</div><div class="v">${esc(fD(emp.doj))}</div></div>
+      <div><div class="l">Assessment Period</div><div class="v">${esc(a.period||"90-Day")}</div></div>
+      <div><div class="l">Assessed By</div><div class="v">${esc(a.submittedBy||"—")}</div></div>
+      <div><div class="l">Assessor Email</div><div class="v">${esc(a.submittedByEmail||"—")}</div></div>
+      <div><div class="l">Submitted On</div><div class="v">${esc(fD(a.submittedDate)||a.submittedDate||"—")}</div></div>
+    </div>
+
+    <div class="sttl">Score Breakdown (Weighted)</div>
+    <div class="formula">Final QOH Score = (Role Effectiveness × 40%) + (Growth Potential × 20%) + (Problem Solving × 20%) + (Culture &amp; Collaboration × 20%)</div>
+    <table><thead><tr><th>Section</th><th class="ctr" style="width:90px">Avg (1–5)</th><th class="ctr" style="width:70px">Weight</th><th class="ctr" style="width:90px">Weighted</th></tr></thead>
+    <tbody>${bdRows}${bdNote}
+    <tr class="total"><td>Final QOH Score</td><td></td><td></td><td class="ctr">${Number(finalShown).toFixed(2)} — ${esc(ri2.l)}</td></tr></tbody></table>
+
+    <div class="sttl">Rating Scale</div>
+    <table><thead><tr><th class="ctr" style="width:56px">Rating</th><th>Meaning</th></tr></thead><tbody>${scaleRows}</tbody></table>
+    ${projHtml}
+
+    <div class="sttl">Part 1 — Role Effectiveness (Performance Objectives) · Weight 40%</div>
+    <table><thead><tr><th>Assessment Area</th><th>Objective</th><th style="width:180px">Rating Given</th></tr></thead><tbody>${p1}</tbody></table>
+
+    <div class="sttl">Part 2 — Manager Assessment (Growth · Problem Solving · Culture) · Weight 20% each</div>
+    <table><thead><tr><th>Assessment Area</th><th>Question</th><th style="width:180px">Rating Given</th></tr></thead><tbody>${p2}</tbody></table>
+
+    <div class="sttl">Overall Recommendation</div>
+    <div class="box">${esc(a.overallRecommendation||a.recommendation||"—")}</div>
+
+    <div class="sttl">Manager Comments</div>
+    <div class="box">${esc(a.comments||a.factorComments||"—")}</div>
+
+    <div class="foot"><span>QualityHire Dashboard · 90-Day Quality of Hire Assessment</span><span>Generated ${new Date().toLocaleString()}</span></div>
+  </body></html>`;
+}
+
+// jsPDF + autoTable are loaded on demand from cdnjs; the PDF is drawn as real
+// vector text/tables (no screenshotting), so nothing gets clipped or blanked.
+function _loadScript(src){
+  return new Promise((resolve,reject)=>{
+    const s=document.createElement("script"); s.src=src;
+    const t=setTimeout(()=>{s.remove();reject(new Error("timeout loading "+src));},12000);
+    s.onload=()=>{clearTimeout(t);resolve();};
+    s.onerror=()=>{clearTimeout(t);s.remove();reject(new Error("failed loading "+src));};
+    document.head.appendChild(s);
+  });
+}
+let _jsPdfLoading=null;
+function loadJsPdf(){
+  if(window.jspdf&&window.jspdf.jsPDF&&window.jspdf.jsPDF.API&&window.jspdf.jsPDF.API.autoTable) return Promise.resolve(window.jspdf.jsPDF);
+  if(_jsPdfLoading) return _jsPdfLoading;
+  _jsPdfLoading=(async()=>{
+    if(!(window.jspdf&&window.jspdf.jsPDF))
+      await _loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
+    if(!(window.jspdf.jsPDF.API&&window.jspdf.jsPDF.API.autoTable))
+      await _loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js");
+    return window.jspdf.jsPDF;
+  })();
+  _jsPdfLoading.catch(()=>{_jsPdfLoading=null;});
+  return _jsPdfLoading;
+}
+function asmPdfFileName(emp,a){
+  const d=(a&&a.submittedDate)?String(a.submittedDate).slice(0,10):new Date().toISOString().slice(0,10);
+  return "QOH_90Day_Assessment_"+String(emp.name||"employee").replace(/\s+/g,"_")+"_"+emp.id+"_"+d+".pdf";
+}
+// ── Draw the full assessment as a native vector PDF ────────────────────────
+function buildAssessmentPdfDoc(JsPDF,emp,a){
+  const TEAL=[13,79,60], INK=[15,23,42], GRAY=[100,116,139], LIGHT=[241,245,249],
+        GREEN_BG=[240,253,244], AMBER=[245,158,11], BORDER=[226,232,240];
+  const doc=new JsPDF({unit:"mm",format:"a4",orientation:"portrait"});
+  const M=13, PW=doc.internal.pageSize.getWidth(), CW=PW-2*M;
+  let y=M;
+
+  const sec=a.sections||{};
+  const meaning=v=>{
+    if(v==="nd"||v==="ND"||v==="Not Demonstrated Yet") return "Not Demonstrated Yet";
+    const n=parseInt(v);
+    return (n>=1&&n<=5)?(n+" - "+ASSESS_MEANING[n]):"Not rated";
+  };
+  const bd=asmBreakdown(a);
+  const finalShown=(bd.computed!==null?bd.computed:bd.stored)||0;
+  const ri2=rI(finalShown);
+  const fmt=v=>v===null?"-":v.toFixed(2);
+  const S=v=>String(v==null?"":v);
+
+  const baseTable={theme:"grid",margin:{left:M,right:M},
+    styles:{font:"helvetica",fontSize:8.6,textColor:INK,cellPadding:{top:1.8,bottom:1.8,left:2.2,right:2.2},lineColor:BORDER,lineWidth:0.15,valign:"top"},
+    headStyles:{fillColor:TEAL,textColor:[255,255,255],fontStyle:"bold",fontSize:7.6},
+    alternateRowStyles:{fillColor:[250,251,253]}};
+  function table(opts){
+    doc.autoTable(Object.assign({},baseTable,opts,{startY:y}));
+    y=doc.lastAutoTable.finalY+5;
+  }
+  function sectionTitle(t){
+    if(y>270){doc.addPage();y=M;}
+    doc.setFillColor(AMBER[0],AMBER[1],AMBER[2]);
+    doc.rect(M,y-3.2,1.4,4.6,"F");
+    doc.setFont("helvetica","bold").setFontSize(10.5).setTextColor(TEAL[0],TEAL[1],TEAL[2]);
+    doc.text(t,M+3.4,y);
+    y+=3.2;
+  }
+  function textBox(content){
+    const txt=S(content).trim()||"-";
+    table({head:null,body:[[txt]],theme:"plain",
+      styles:Object.assign({},baseTable.styles,{fontSize:9,fillColor:[248,250,252],cellPadding:{top:2.6,bottom:2.6,left:3,right:3}}),
+      tableLineColor:BORDER,tableLineWidth:0.2});
+  }
+
+  // ── Header band ──
+  doc.setFillColor(TEAL[0],TEAL[1],TEAL[2]);
+  doc.rect(0,0,PW,24,"F");
+  doc.setFont("helvetica","bold").setFontSize(14).setTextColor(255,255,255);
+  doc.text("QualityHire - 90-Day Quality of Hire Assessment",M,10.5);
+  doc.setFont("helvetica","normal").setFontSize(9.5).setTextColor(209,250,229);
+  doc.text(S(emp.name)+"  ("+S(emp.id)+")",M,17);
+  // Score chip on the right
+  doc.setFont("helvetica","bold").setFontSize(16).setTextColor(255,255,255);
+  const scoreTxt=Number(finalShown).toFixed(2)+" / 5";
+  doc.text(scoreTxt,PW-M,11,{align:"right"});
+  doc.setFontSize(8.5).setTextColor(253,230,138);
+  doc.text(ri2.l.toUpperCase(),PW-M,17,{align:"right"});
+  y=31;
+
+  // ── Employee & submission details ──
+  sectionTitle("Employee & Submission Details");
+  table({head:null,theme:"grid",
+    body:[
+      ["Employee",S(emp.name),"Employee ID",S(emp.id)],
+      ["Designation",S(emp.designation||"-"),"Department",S(emp.department||"-")],
+      ["Date of Joining",S(fD(emp.doj)),"Assessment Period",S(a.period||"90-Day")],
+      ["Assessed By",S(a.submittedBy||"-"),"Assessor Email",S(a.submittedByEmail||"-")],
+      ["Submitted On",S(fD(a.submittedDate)||a.submittedDate||"-"),"Reporting Manager",S(emp.manager||"-")]
+    ],
+    columnStyles:{0:{fontStyle:"bold",fillColor:LIGHT,cellWidth:34},1:{cellWidth:58},2:{fontStyle:"bold",fillColor:LIGHT,cellWidth:34}}});
+
+  // ── Weighted score breakdown ──
+  sectionTitle("Score Breakdown (Weighted)");
+  doc.setFont("helvetica","normal").setFontSize(7.8).setTextColor(GRAY[0],GRAY[1],GRAY[2]);
+  doc.text("Final QOH Score = (Role Effectiveness x 40%) + (Growth Potential x 20%) + (Problem Solving x 20%) + (Culture & Collaboration x 20%)",M,y+1);
+  y+=4;
+  const bdBody=bd.rows.map(r=>[r.label,fmt(r.avg),Math.round(r.w*100)+"%",fmt(r.weighted)]);
+  if(!bd.complete) bdBody.push([{content:"Per-question ratings are not stored for one or more sections, so section averages can't be recomputed - the submitted final score is shown.",colSpan:4,styles:{textColor:GRAY,fontSize:7.8}}]);
+  bdBody.push([
+    {content:"Final QOH Score",styles:{fontStyle:"bold",fillColor:GREEN_BG,textColor:TEAL}},
+    {content:"",styles:{fillColor:GREEN_BG}},{content:"",styles:{fillColor:GREEN_BG}},
+    {content:Number(finalShown).toFixed(2)+"  ("+ri2.l+")",styles:{fontStyle:"bold",fillColor:GREEN_BG,textColor:TEAL,halign:"center"}}
+  ]);
+  table({head:[["Section","Avg (1-5)","Weight","Weighted"]],body:bdBody,
+    columnStyles:{0:{cellWidth:CW-72},1:{cellWidth:24,halign:"center"},2:{cellWidth:20,halign:"center"},3:{cellWidth:28,halign:"center",fontStyle:"bold",textColor:TEAL}}});
+
+  // ── Rating scale ──
+  sectionTitle("Rating Scale");
+  table({head:[["Rating","Meaning"]],
+    body:[["5",ASSESS_MEANING[5]],["4",ASSESS_MEANING[4]],["3",ASSESS_MEANING[3]],["2",ASSESS_MEANING[2]],["1",ASSESS_MEANING[1]],["ND","Not Demonstrated Yet"]],
+    columnStyles:{0:{cellWidth:20,halign:"center",fontStyle:"bold",textColor:TEAL}}});
+
+  // ── Projects (if any) ──
+  const projects=Array.isArray(emp.projects)?emp.projects:[];
+  if(projects.length){
+    sectionTitle("Project Details");
+    table({head:[["Project Name","Start Date","End Date","PM","DD","Allocation"]],
+      body:projects.map(p=>[S(p.name||"-"),S(p.start||"-"),S(p.end||"-"),S(p.pm||"-"),S(p.dd||"-"),p.allocation?S(p.allocation)+"%":"-"]),
+      columnStyles:{0:{fontStyle:"bold"}}});
+  }
+
+  // ── Part 1: Role Effectiveness ──
+  sectionTitle("Part 1 - Role Effectiveness (Performance Objectives) - Weight 40%");
+  const pos=(emp.performanceObjectives||[]);
+  const reR=(sec.roleEffectiveness&&sec.roleEffectiveness.ratings)||[];
+  const p1=pos.length
+    ? pos.map((po,i)=>[S(po.subCategory||("Performance Objective "+(i+1))),S(po.objective||po.subCategory||""),meaning(reR[i])])
+    : [[{content:"No performance objectives were defined for this employee.",colSpan:3,styles:{textColor:GRAY}}]];
+  table({head:[["Assessment Area","Objective","Rating Given"]],body:p1,
+    columnStyles:{0:{cellWidth:44,fontStyle:"bold"},2:{cellWidth:44,fontStyle:"bold",textColor:TEAL}}});
+
+  // ── Part 2: Manager Assessment ──
+  sectionTitle("Part 2 - Manager Assessment (Growth 20% - Problem Solving 20% - Culture 20%)");
+  const p2=[];
+  ASSESS_SECTIONS.forEach(s=>{
+    const rr=(sec[s.key]&&sec[s.key].ratings)||[];
+    p2.push([{content:s.cat,colSpan:3,styles:{fillColor:LIGHT,fontStyle:"bold",textColor:[51,65,85],fontSize:8}}]);
+    s.areas.forEach((ar,i)=>p2.push([S(ar.area),S(ar.q),meaning(rr[i])]));
+  });
+  table({head:[["Assessment Area","Question","Rating Given"]],body:p2,
+    columnStyles:{0:{cellWidth:44,fontStyle:"bold"},2:{cellWidth:44,fontStyle:"bold",textColor:TEAL}}});
+
+  // ── Recommendation & comments ──
+  sectionTitle("Overall Recommendation");
+  textBox(a.overallRecommendation||a.recommendation||"-");
+  sectionTitle("Manager Comments");
+  textBox(a.comments||a.factorComments||"-");
+
+  // ── Footer with page numbers ──
+  const pages=doc.internal.getNumberOfPages();
+  for(let p=1;p<=pages;p++){
+    doc.setPage(p);
+    doc.setFont("helvetica","normal").setFontSize(7).setTextColor(148,163,184);
+    doc.text("QualityHire Dashboard - 90-Day Quality of Hire Assessment - "+S(emp.name),M,292);
+    doc.text("Generated "+new Date().toLocaleString()+"   |   Page "+p+" of "+pages,PW-M,292,{align:"right"});
+  }
+  return doc;
+}
+async function downloadAssessmentPdf(empId){
+  empId=empId||VIEW_ASM_EMPID;
+  const emp=EMPS.find(e=>e.id===empId);
+  if(!emp){toast("Not found","Employee not found.","err");return;}
+  const st=empStatus(emp); const a=st.asm;
+  if(!a){toast("No assessment","No submitted assessment found for "+emp.name+".","warn");return;}
+  toast("Preparing PDF…","Building the assessment report for "+emp.name+".","ok");
+  try{
+    const JsPDF=await loadJsPdf();
+    const doc=buildAssessmentPdfDoc(JsPDF,emp,a);
+    doc.save(asmPdfFileName(emp,a));
+    toast("PDF Downloaded","Saved as "+asmPdfFileName(emp,a),"ok");
+  }catch(err){
+    // Offline / CDN blocked — open a print window so it can be saved as PDF.
+    console.warn("jsPDF unavailable, falling back to print window:",err);
+    const html=buildAssessmentReport(emp,a);
+    const w=window.open("","_blank");
+    if(!w){toast("Popup blocked","Please allow popups, then click Download PDF again.","err");return;}
+    w.document.open();
+    w.document.write(html.replace("</body>",'<script>window.addEventListener("load",function(){setTimeout(function(){window.print();},400);});<\/script></body>'));
+    w.document.close();
+    toast("Print to PDF","Couldn't load the PDF library — use \"Save as PDF\" in the print dialog that opens.","warn");
+  }
+}
 function sCol(s){return s>=4?"#10b981":s>=3?"#f59e0b":"#ef4444";}
 
 // ── Init ─────────────────────────────────────────────────────────────────
@@ -3601,6 +3965,7 @@ function renderPending(){
           actionHtml=`<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
             <span style="font-size:12px;color:#059669">&#10003; Assessed ${fD(st.asm&&st.asm.submittedDate)}</span>
             <button class="btn btn-ghost btn-sm" data-viewasm="${emp.id}" title="View the completed assessment form">&#128065; View</button>
+            <button class="btn btn-ghost btn-sm" data-pdfasm="${emp.id}" title="Download the completed assessment as a PDF (all questions, ratings, scale &amp; weighted scores)">&#8595; PDF</button>
           </div>`;
         }else{
           actionHtml=`<span style="font-size:12px;color:#94a3b8">Upcoming ${fD(st.day90)}</span>`;
@@ -3632,6 +3997,7 @@ function renderPending(){
     pT.querySelectorAll("[data-remind-follow]").forEach(btn=>{btn.addEventListener("click",()=>sendReminderToEmp(btn.dataset.remindFollow,'reminder'));});
     pT.querySelectorAll("[data-genform]").forEach(btn=>{btn.addEventListener("click",()=>downloadEmployeeForm(btn.dataset.genform));});
     pT.querySelectorAll("[data-viewasm]").forEach(btn=>{btn.addEventListener("click",()=>openAssessmentView(btn.dataset.viewasm));});
+    pT.querySelectorAll("[data-pdfasm]").forEach(btn=>{btn.addEventListener("click",()=>downloadAssessmentPdf(btn.dataset.pdfasm));});
     pT.querySelectorAll("[data-tgl]").forEach(btn=>{btn.addEventListener("click",()=>toggleAutoEmp(btn.dataset.tgl));});
   }
 }
@@ -4136,7 +4502,10 @@ function expEmpStatus(){const pickF=(a,keys)=>{for(const k of keys){if(a&&a[k]!=
   <div class="modal" style="max-width:880px">
     <div class="modal-hdr">
       <div class="modal-title" id="viewAsmTitle">90-Day Assessment</div>
-      <button class="modal-x" onclick="closeAssessmentView()">&#215;</button>
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="btn btn-am btn-sm" id="viewAsmPdfBtn" onclick="downloadAssessmentPdf()" title="Download this completed assessment as a PDF (all questions, ratings, scale &amp; weighted scores)" style="display:none">&#8595; Download PDF</button>
+        <button class="modal-x" onclick="closeAssessmentView()">&#215;</button>
+      </div>
     </div>
     <div id="viewAsmBody"></div>
   </div>
