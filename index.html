@@ -2169,6 +2169,19 @@ function rI(s){if(s>=4.5)return{l:"Exceptional",c:"b-p"};if(s>=3.5)return{l:"Str
 
 // ── Completed-assessment viewer (mirrors the manager form) ──────────────────
 const ASSESS_MEANING={1:"Under Performance",2:"Partially Meets Expectations",3:"Meets Expectations",4:"Exceeds Expectations",5:"Outstanding Performance"};
+// Overall Recommendation — its question and its own 1–5 scale (mirrors the manager form)
+const ASSESS_REC_QUESTION="Considering the Altudian's performance, potential, and fit so far, how would you assess the overall hiring outcome?";
+const ASSESS_REC_SCALE={1:"Did Not Meet Hiring Expectations",2:"Partially Met Hiring Expectations",3:"Met Hiring Expectations",4:"Exceeded Hiring Expectations",5:"Significantly Exceeded Hiring Expectations"};
+// Format a stored recommendation value as "n — label" whether it was saved as a
+// number ("4") or as the label text ("Exceeded Hiring Expectations").
+function recMeaning(v){
+  const s=String(v==null?"":v).trim();
+  if(!s) return "—";
+  const n=parseInt(s);
+  if(n>=1&&n<=5&&String(n)===s) return n+" — "+ASSESS_REC_SCALE[n];
+  for(const k in ASSESS_REC_SCALE){ if(ASSESS_REC_SCALE[k].toLowerCase()===s.toLowerCase()) return k+" — "+ASSESS_REC_SCALE[k]; }
+  return s;
+}
 let VIEW_ASM_EMPID=null; // employee whose assessment is open in the viewer (used by Download PDF)
 const ASSESS_WEIGHTS=[
   {key:"roleEffectiveness", label:"Role Effectiveness (Performance Objectives)", w:0.40},
@@ -2239,7 +2252,7 @@ function openAssessmentView(empId){
       <div><span>Employee</span>${esc(emp.name)} · ${esc(emp.id)}</div>
       <div><span>Assessed by</span>${esc(a.submittedBy||"—")}${a.submittedByEmail?" · "+esc(a.submittedByEmail):""}</div>
       <div><span>Date</span>${esc(fD(a.submittedDate)||a.submittedDate||"—")}</div>
-      <div><span>QOH Score</span><strong>${a.finalScore||"—"}</strong> &nbsp;<span class="bdg ${ri.c}">${ri.l}</span></div>
+      <div><span>QOH Score</span><strong>${a.finalScore||"—"}</strong></div>
     </div>
     ${note}
     ${asmScoreBreakdownHtml(a)}
@@ -2249,8 +2262,11 @@ function openAssessmentView(empId){
     <table class="va-tbl"><thead><tr><th>Assessment Area</th><th>Objective</th><th style="width:150px">Rating</th></tr></thead><tbody>${p1}</tbody></table>
     <div class="va-secttl"><span class="part-num2">2</span> Manager Assessment</div>
     <table class="va-tbl"><thead><tr><th>Assessment Area</th><th>Question</th><th style="width:150px">Rating</th></tr></thead><tbody>${p2}</tbody></table>
-    <div class="va-secttl">Overall Recommendation</div>
-    <div class="va-box">${esc(a.overallRecommendation||a.recommendation||"—")}</div>
+    ${asmRecScaleHtml()}
+    <div class="va-secttl"><span class="part-num2">3</span> Overall Recommendation (Validation — Not Scored)</div>
+    <table class="va-tbl"><thead><tr><th>Assessment Area</th><th>Question</th><th style="width:150px">Answer Given</th></tr></thead><tbody>
+      <tr><td class="va-area">Overall Recommendation</td><td class="va-q">${esc(ASSESS_REC_QUESTION)}</td><td class="va-r">${esc(recMeaning(a.overallRecommendation||a.recommendation))}</td></tr>
+    </tbody></table>
     <div class="va-secttl">Manager Comments</div>
     <div class="va-box">${esc(a.comments||a.factorComments||"—")}</div>`;
   ov.classList.add("open");
@@ -2286,15 +2302,21 @@ function asmScoreBreakdownHtml(a){
     <div class="va-secttl">Score Breakdown (Weighted)</div>
     <table class="va-tbl"><thead><tr><th>Section</th><th style="text-align:center;width:110px">Avg (1–5)</th><th style="text-align:center;width:90px">Weight</th><th style="text-align:center;width:120px">Weighted</th></tr></thead>
     <tbody>${rows}${noteRow}
-    <tr style="background:#f0fdf4"><td class="va-area" style="color:#0d4f3c">Final QOH Score &nbsp;<span style="font-weight:600;color:#64748b;font-size:11px">= (RE × 40%) + (GP × 20%) + (PS × 20%) + (CC × 20%)</span></td><td></td><td></td><td class="va-r" style="text-align:center;font-size:14px">${Number(finalShown).toFixed(2)} <span class="bdg ${ri2.c}" style="margin-left:4px">${ri2.l}</span></td></tr>
+    <tr style="background:#f0fdf4"><td class="va-area" style="color:#0d4f3c">Final QOH Score &nbsp;<span style="font-weight:600;color:#64748b;font-size:11px">= (RE × 40%) + (GP × 20%) + (PS × 20%) + (CC × 20%)</span></td><td></td><td></td><td class="va-r" style="text-align:center;font-size:14px">${Number(finalShown).toFixed(2)}</td></tr>
     </tbody></table>`;
 }
 function asmScaleLegendHtml(){
   const rows=[5,4,3,2,1].map(n=>`<tr><td class="va-r" style="width:60px;text-align:center">${n}</td><td class="va-q">${ASSESS_MEANING[n]}</td></tr>`).join("")
     +`<tr><td class="va-r" style="text-align:center">ND</td><td class="va-q">Not Demonstrated Yet</td></tr>`;
   return `
-    <div class="va-secttl">Rating Scale</div>
+    <div class="va-secttl">Rating Scale (Questions)</div>
     <table class="va-tbl"><thead><tr><th style="text-align:center">Rating</th><th>Meaning</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+function asmRecScaleHtml(){
+  const recRows=[5,4,3,2,1].map(n=>`<tr><td class="va-r" style="width:60px;text-align:center">${n}</td><td class="va-q">${ASSESS_REC_SCALE[n]}</td></tr>`).join("");
+  return `
+    <div class="va-secttl">Overall Recommendation Scale</div>
+    <table class="va-tbl"><thead><tr><th style="text-align:center">Rating</th><th>Meaning</th></tr></thead><tbody>${recRows}</tbody></table>`;
 }
 
 // ── Download a completed assessment as PDF ─────────────────────────────────
@@ -2332,6 +2354,7 @@ function buildAssessmentReport(emp,a){
 
   const scaleRows=[5,4,3,2,1].map(n=>`<tr><td class="ctr rr" style="width:56px">${n}</td><td class="rq">${ASSESS_MEANING[n]}</td></tr>`).join("")
     +`<tr><td class="ctr rr">ND</td><td class="rq">Not Demonstrated Yet</td></tr>`;
+  const recScaleRows=[5,4,3,2,1].map(n=>`<tr><td class="ctr rr" style="width:56px">${n}</td><td class="rq">${ASSESS_REC_SCALE[n]}</td></tr>`).join("");
 
   const projects=Array.isArray(emp.projects)?emp.projects:[];
   const projHtml=projects.length?`
@@ -2377,7 +2400,6 @@ function buildAssessmentReport(emp,a){
       </div>
       <div class="scorebox">
         <div class="v">${Number(finalShown).toFixed(2)} / 5</div>
-        <span class="b">${esc(ri2.l)}</span>
       </div>
     </div>
     <div class="meta">
@@ -2396,10 +2418,11 @@ function buildAssessmentReport(emp,a){
     <div class="formula">Final QOH Score = (Role Effectiveness × 40%) + (Growth Potential × 20%) + (Problem Solving × 20%) + (Culture &amp; Collaboration × 20%)</div>
     <table><thead><tr><th>Section</th><th class="ctr" style="width:90px">Avg (1–5)</th><th class="ctr" style="width:70px">Weight</th><th class="ctr" style="width:90px">Weighted</th></tr></thead>
     <tbody>${bdRows}${bdNote}
-    <tr class="total"><td>Final QOH Score</td><td></td><td></td><td class="ctr">${Number(finalShown).toFixed(2)} — ${esc(ri2.l)}</td></tr></tbody></table>
+    <tr class="total"><td>Final QOH Score</td><td></td><td></td><td class="ctr">${Number(finalShown).toFixed(2)}</td></tr></tbody></table>
 
-    <div class="sttl">Rating Scale</div>
+    <div class="sttl">Rating Scale (Questions — Parts 1 &amp; 2)</div>
     <table><thead><tr><th class="ctr" style="width:56px">Rating</th><th>Meaning</th></tr></thead><tbody>${scaleRows}</tbody></table>
+
     ${projHtml}
 
     <div class="sttl">Part 1 — Role Effectiveness (Performance Objectives) · Weight 40%</div>
@@ -2408,8 +2431,13 @@ function buildAssessmentReport(emp,a){
     <div class="sttl">Part 2 — Manager Assessment (Growth · Problem Solving · Culture) · Weight 20% each</div>
     <table><thead><tr><th>Assessment Area</th><th>Question</th><th style="width:180px">Rating Given</th></tr></thead><tbody>${p2}</tbody></table>
 
-    <div class="sttl">Overall Recommendation</div>
-    <div class="box">${esc(a.overallRecommendation||a.recommendation||"—")}</div>
+    <div class="sttl">Overall Recommendation Scale (Part 3)</div>
+    <table><thead><tr><th class="ctr" style="width:56px">Rating</th><th>Meaning</th></tr></thead><tbody>${recScaleRows}</tbody></table>
+
+    <div class="sttl">Part 3 — Overall Recommendation (Validation · Not Scored)</div>
+    <table><thead><tr><th>Assessment Area</th><th>Question</th><th style="width:180px">Answer Given</th></tr></thead><tbody>
+      <tr><td class="ra">Overall Recommendation</td><td class="rq">${esc(ASSESS_REC_QUESTION)}</td><td class="rr">${esc(recMeaning(a.overallRecommendation||a.recommendation))}</td></tr>
+    </tbody></table>
 
     <div class="sttl">Manager Comments</div>
     <div class="box">${esc(a.comments||a.factorComments||"—")}</div>
@@ -2500,9 +2528,7 @@ function buildAssessmentPdfDoc(JsPDF,emp,a){
   // Score chip on the right
   doc.setFont("helvetica","bold").setFontSize(16).setTextColor(255,255,255);
   const scoreTxt=Number(finalShown).toFixed(2)+" / 5";
-  doc.text(scoreTxt,PW-M,11,{align:"right"});
-  doc.setFontSize(8.5).setTextColor(253,230,138);
-  doc.text(ri2.l.toUpperCase(),PW-M,17,{align:"right"});
+  doc.text(scoreTxt,PW-M,13,{align:"right"});
   y=31;
 
   // ── Employee & submission details ──
@@ -2527,13 +2553,13 @@ function buildAssessmentPdfDoc(JsPDF,emp,a){
   bdBody.push([
     {content:"Final QOH Score",styles:{fontStyle:"bold",fillColor:GREEN_BG,textColor:TEAL}},
     {content:"",styles:{fillColor:GREEN_BG}},{content:"",styles:{fillColor:GREEN_BG}},
-    {content:Number(finalShown).toFixed(2)+"  ("+ri2.l+")",styles:{fontStyle:"bold",fillColor:GREEN_BG,textColor:TEAL,halign:"center"}}
+    {content:Number(finalShown).toFixed(2),styles:{fontStyle:"bold",fillColor:GREEN_BG,textColor:TEAL,halign:"center"}}
   ]);
   table({head:[["Section","Avg (1-5)","Weight","Weighted"]],body:bdBody,
     columnStyles:{0:{cellWidth:CW-72},1:{cellWidth:24,halign:"center"},2:{cellWidth:20,halign:"center"},3:{cellWidth:28,halign:"center",fontStyle:"bold",textColor:TEAL}}});
 
-  // ── Rating scale ──
-  sectionTitle("Rating Scale");
+  // ── Rating scales ──
+  sectionTitle("Rating Scale (Questions - Parts 1 & 2)");
   table({head:[["Rating","Meaning"]],
     body:[["5",ASSESS_MEANING[5]],["4",ASSESS_MEANING[4]],["3",ASSESS_MEANING[3]],["2",ASSESS_MEANING[2]],["1",ASSESS_MEANING[1]],["ND","Not Demonstrated Yet"]],
     columnStyles:{0:{cellWidth:20,halign:"center",fontStyle:"bold",textColor:TEAL}}});
@@ -2568,9 +2594,15 @@ function buildAssessmentPdfDoc(JsPDF,emp,a){
   table({head:[["Assessment Area","Question","Rating Given"]],body:p2,
     columnStyles:{0:{cellWidth:44,fontStyle:"bold"},2:{cellWidth:44,fontStyle:"bold",textColor:TEAL}}});
 
-  // ── Recommendation & comments ──
-  sectionTitle("Overall Recommendation");
-  textBox(a.overallRecommendation||a.recommendation||"-");
+  // ── Part 3: Overall Recommendation — its scale first, then question + answer ──
+  sectionTitle("Overall Recommendation Scale (Part 3)");
+  table({head:[["Rating","Meaning"]],
+    body:[["5",ASSESS_REC_SCALE[5]],["4",ASSESS_REC_SCALE[4]],["3",ASSESS_REC_SCALE[3]],["2",ASSESS_REC_SCALE[2]],["1",ASSESS_REC_SCALE[1]]],
+    columnStyles:{0:{cellWidth:20,halign:"center",fontStyle:"bold",textColor:TEAL}}});
+  sectionTitle("Part 3 - Overall Recommendation (Validation - Not Scored)");
+  table({head:[["Assessment Area","Question","Answer Given"]],
+    body:[["Overall Recommendation",ASSESS_REC_QUESTION,recMeaning(a.overallRecommendation||a.recommendation)]],
+    columnStyles:{0:{cellWidth:44,fontStyle:"bold"},2:{cellWidth:44,fontStyle:"bold",textColor:TEAL}}});
   sectionTitle("Manager Comments");
   textBox(a.comments||a.factorComments||"-");
 
