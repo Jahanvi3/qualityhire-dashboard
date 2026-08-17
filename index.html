@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>QualityHire Dashboard</title>
+<title>TalentLens — Early Tenure Reviews</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 /* ── Design Tokens ── */
@@ -435,7 +435,7 @@ window.addEventListener('unhandledrejection', function(e){
   <div class="lc">
     <div class="lc-brand">
       <div class="lc-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></div>
-      <div><div class="lc-nm">QualityHire</div><div class="lc-sm">90-Day Assessment Dashboard</div></div>
+      <div><div class="lc-nm">TalentLens</div><div class="lc-sm">Early tenure reviews at 90 and 180 days</div></div>
     </div>
     <div class="lc-h">Welcome back &#128075;</div>
     <div class="lc-s">Enter your work email — your role &amp; view will be set automatically based on your account.</div>
@@ -465,7 +465,7 @@ window.addEventListener('unhandledrejection', function(e){
 <aside class="sb">
   <div class="sb-brand">
     <div class="sb-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></div>
-    <div><div class="sb-nm">QualityHire</div><div class="sb-sm">HR Dashboard</div><div class="live"><span class="ldot"></span>Live Sync</div></div>
+    <div><div class="sb-nm">TalentLens</div><div class="sb-sm">Early Tenure Reviews</div><div class="live"><span class="ldot"></span>Live Sync</div></div>
   </div>
   <nav class="sb-nav">
     <span class="nsep">Overview</span>
@@ -724,6 +724,8 @@ function importResults(){
 
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script>
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -1087,20 +1089,20 @@ const TKS180 = 'qoh_tmpl180_subject_v1';
 const TKI180 = 'qoh_tmpl180_init_v1';
 const TKIS180= 'qoh_tmpl180_init_subject_v1';
 
-const DEF_SUBJECT_180 = "Reminder: 180-Day Quality of Hire Assessment Pending for [Employee Name]";
-const DEF_TMPL_180 = "Hi [Manager Name],\n\nThis is a gentle reminder to complete the 180-Day Quality of Hire Assessment for [Employee Name].\n\nYour feedback is required to assess sustained performance, growth, and overall quality of hire at the six-month mark.\n\nPlease find the assessment form attached with this email.\n\nRequest you to complete the form and submit it by [Due Date].\n\nEmployee Details:\nEmployee Name: [Employee Name]\nEmployee ID: [Employee ID]\nDesignation: [Designation]\nDepartment: [Department]\n180-Day Date: [180-Day Date]\n\nRegards,\nHR Team";
-const DEF_SUBJECT_180_INIT = "Action Required: 180-Day Quality of Hire Assessment for [Employee Name] \u2014 due [Due Date]";
-const DEF_TMPL_180_INIT = "Hi [Manager Name],\n\n[Employee Name] will be completing their 180-day milestone with us on [180-Day Date].\n\nAs part of our Quality of Hire process, we request you to complete the 180-Day Quality of Hire Assessment for them. Your evaluation helps us measure sustained performance, growth, and confirmation readiness.\n\nThe assessment form is attached with this email \u2014 it is prefilled for [Employee Name], so you only need to fill in your ratings and feedback.\n\nKindly complete and submit the assessment by [Due Date].\n\nEmployee Details:\nEmployee Name: [Employee Name]\nEmployee ID: [Employee ID]\nDesignation: [Designation]\nDepartment: [Department]\n180-Day Completion Date: [180-Day Date]\n\nIf the assessment is not received, automatic reminders will follow until it is submitted.\n\nThank you for your time and support.\n\nRegards,\nHR Team";
+const DEF_SUBJECT_180 = "Reminder: 180-Day Review Pending for [Employee Name]";
+const DEF_TMPL_180 = "Hi [Manager Name],\n\nThis is a gentle reminder to complete the 180-Day Review for [Employee Name].\n\nYour feedback is required to assess sustained performance, growth, and overall quality of hire at the six-month mark.\n\nPlease find the assessment form attached with this email.\n\nRequest you to complete the form and submit it by [Due Date].\n\nEmployee Details:\nEmployee Name: [Employee Name]\nEmployee ID: [Employee ID]\nDesignation: [Designation]\nDepartment: [Department]\n180-Day Date: [180-Day Date]\n\nRegards,\nHR Team";
+const DEF_SUBJECT_180_INIT = "Action Required: 180-Day Review for [Employee Name] \u2014 due [Due Date]";
+const DEF_TMPL_180_INIT = "Hi [Manager Name],\n\n[Employee Name] will be completing their 180-day milestone with us on [180-Day Date].\n\nAs part of our TalentLens review process, we request you to complete the 180-Day Review for them. Your evaluation helps us measure sustained performance, growth, and confirmation readiness.\n\nThe assessment form is attached with this email \u2014 it is prefilled for [Employee Name], so you only need to fill in your ratings and feedback.\n\nKindly complete and submit the assessment by [Due Date].\n\nEmployee Details:\nEmployee Name: [Employee Name]\nEmployee ID: [Employee ID]\nDesignation: [Designation]\nDepartment: [Department]\n180-Day Completion Date: [180-Day Date]\n\nIf the assessment is not received, automatic reminders will follow until it is submitted.\n\nThank you for your time and support.\n\nRegards,\nHR Team";
 
 function rTm180(){try{return localStorage.getItem(TK180)||DEF_TMPL_180;}catch(e){return DEF_TMPL_180;}}
 function rSub180(){try{return localStorage.getItem(TKS180)||DEF_SUBJECT_180;}catch(e){return DEF_SUBJECT_180;}}
 function rTmI180(){try{return localStorage.getItem(TKI180)||DEF_TMPL_180_INIT;}catch(e){return DEF_TMPL_180_INIT;}}
 function rSubI180(){try{return localStorage.getItem(TKIS180)||DEF_SUBJECT_180_INIT;}catch(e){return DEF_SUBJECT_180_INIT;}}
-const DEF_SUBJECT = "Reminder: 90-Day Quality of Hire Assessment Pending for [Employee Name]";
-const DEF_TMPL = "Hi [Manager Name],\n\nThis is a gentle reminder to complete the 90-Day Quality of Hire Assessment for [Employee Name].\n\nThe employee has completed / is completing the 90-day milestone, and your feedback is required to assess role fitment, performance, onboarding effectiveness, and overall quality of hire.\n\nPlease find the assessment form attached with this email.\n\nRequest you to complete the form and submit it by [Due Date].\n\nEmployee Details:\nEmployee Name: [Employee Name]\nEmployee ID: [Employee ID]\nDesignation: [Designation]\nDepartment: [Department]\n90-Day Date: [90-Day Date]\n\nYour timely feedback will help us review the hiring quality, onboarding effectiveness, and early performance indicators.\n\nRegards,\nHR Team";
+const DEF_SUBJECT = "Reminder: 90-Day Review Pending for [Employee Name]";
+const DEF_TMPL = "Hi [Manager Name],\n\nThis is a gentle reminder to complete the 90-Day Review for [Employee Name].\n\nThe employee has completed / is completing the 90-day milestone, and your feedback is required to assess role fitment, performance, onboarding effectiveness, and overall quality of hire.\n\nPlease find the assessment form attached with this email.\n\nRequest you to complete the form and submit it by [Due Date].\n\nEmployee Details:\nEmployee Name: [Employee Name]\nEmployee ID: [Employee ID]\nDesignation: [Designation]\nDepartment: [Department]\n90-Day Date: [90-Day Date]\n\nYour timely feedback will help us review the hiring quality, onboarding effectiveness, and early performance indicators.\n\nRegards,\nHR Team";
 // First-Time (initial) email — sent automatically 15 days BEFORE the 90-day mark.
-const DEF_SUBJECT_INIT = "Action Required: 90-Day Quality of Hire Assessment for [Employee Name] \u2014 due [Due Date]";
-const DEF_TMPL_INIT = "Hi [Manager Name],\n\n[Employee Name] will be completing their 90-day milestone with us on [90-Day Date].\n\nAs part of our Quality of Hire process, we request you to complete the 90-Day Quality of Hire Assessment for them. Your evaluation helps us measure role fitment, early performance, onboarding effectiveness, and overall hiring quality.\n\nThe assessment form is attached with this email \u2014 it is prefilled for [Employee Name], so you only need to fill in your ratings and feedback.\n\nKindly complete and submit the assessment by [Due Date].\n\nEmployee Details:\nEmployee Name: [Employee Name]\nEmployee ID: [Employee ID]\nDesignation: [Designation]\nDepartment: [Department]\n90-Day Completion Date: [90-Day Date]\n\nIf the assessment is not received, automatic reminders will follow until it is submitted.\n\nThank you for your time and support.\n\nRegards,\nHR Team";
+const DEF_SUBJECT_INIT = "Action Required: 90-Day Review for [Employee Name] \u2014 due [Due Date]";
+const DEF_TMPL_INIT = "Hi [Manager Name],\n\n[Employee Name] will be completing their 90-day milestone with us on [90-Day Date].\n\nAs part of our TalentLens review process, we request you to complete the 90-Day Review for them. Your evaluation helps us measure role fitment, early performance, onboarding effectiveness, and overall hiring quality.\n\nThe assessment form is attached with this email \u2014 it is prefilled for [Employee Name], so you only need to fill in your ratings and feedback.\n\nKindly complete and submit the assessment by [Due Date].\n\nEmployee Details:\nEmployee Name: [Employee Name]\nEmployee ID: [Employee ID]\nDesignation: [Designation]\nDepartment: [Department]\n90-Day Completion Date: [90-Day Date]\n\nIf the assessment is not received, automatic reminders will follow until it is submitted.\n\nThank you for your time and support.\n\nRegards,\nHR Team";
 // ── Automation settings ──────────────────────────────────────────────────
 const AUTO_LEAD_DAYS   = 15;   // first-time email goes out this many days BEFORE the 90-day mark
 const AUTO_REMIND_EVERY = 3;   // automatic reminder cadence in WORKING days (Sat & Sun excluded) while pending
@@ -2243,11 +2245,14 @@ tr.needs-input td{background:#fef2f2 !important}
 
 /* Score preview */
 .score-preview{background:linear-gradient(135deg,#f0fdf4 0%,#dcfce7 100%);border:1.5px solid #bbf7d0;border-radius:12px;padding:16px 20px;margin-bottom:18px;display:flex;align-items:center;gap:20px;flex-wrap:wrap}
-.sp-item{text-align:center;flex:1;min-width:80px}
-.sp-label{font-size:10px;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px}
-.sp-val{font-size:22px;font-weight:800;color:#0f172a}
-.sp-sub{font-size:10.5px;color:#6b7280;margin-top:2px}
-.sp-divider{width:1px;height:50px;background:#bbf7d0;flex-shrink:0}
+.sp-item{flex:1;min-width:94px;display:flex;flex-direction:column;align-items:center;text-align:center;padding:0 6px}
+/* Labels wrap to two lines at some widths; a fixed block keeps every score on
+   the same baseline instead of stair-stepping across the bar. */
+.sp-label{font-size:9.5px;font-weight:800;color:#065f46;text-transform:uppercase;letter-spacing:.08em;line-height:1.25;min-height:24px;display:flex;align-items:center;justify-content:center}
+.sp-wt{font-size:9px;font-weight:800;color:#047857;background:rgba(255,255,255,.75);border:1px solid #a7f3d0;border-radius:20px;padding:1.5px 8px;letter-spacing:.05em;margin:5px 0 7px;white-space:nowrap}
+.sp-val{font-size:23px;font-weight:800;color:#0f172a;line-height:1}
+.sp-sub{font-size:10px;color:#6b7280;margin-top:5px;line-height:1.35}
+.sp-divider{width:1px;height:66px;background:#bbf7d0;flex-shrink:0;align-self:center}
 
 /* Submit button */
 .submit-btn{width:100%;padding:15px;border-radius:12px;background:linear-gradient(135deg,#0d4f3c 0%,#065f46 100%);border:none;color:#fff;font-size:15px;font-weight:800;cursor:pointer;font-family:'Inter',system-ui,sans-serif;box-shadow:0 4px 14px rgba(13,79,60,.35);transition:all .18s;display:flex;align-items:center;justify-content:center;gap:10px}
@@ -2262,7 +2267,7 @@ tr.needs-input td{background:#fef2f2 !important}
 <!-- ── Header ── -->
 <div class="form-header">
   <div class="form-header-top">
-    <div class="form-brand">${period} Assessment Form<span>Quality of Hire</span></div>
+    <div class="form-brand">${period} Review<span>TalentLens</span></div>
   </div>
 </div>
 
@@ -2387,27 +2392,43 @@ tr.needs-input td{background:#fef2f2 !important}
   <div class="score-preview" id="scorePreview">
     <div class="sp-item">
       <div class="sp-label">Role Effectiveness</div>
-      <div class="sp-val" id="sp_re">—</div>
-      <div class="sp-sub" id="sp_w_re">${_is180 && _compKeys.length ? "Objectives + Competencies" : "Performance Objectives"}</div>
+      <div class="sp-wt" id="sp_wt_re">40%</div>
+      <div class="sp-val" id="sp_re">&mdash;</div>
+      <div class="sp-sub" id="sp_w_re">${_is180 && _compKeys.length ? "Objectives + competencies" : "Performance objectives"}</div>
     </div>
     <div class="sp-divider"></div>
     ${(_is180 && _compKeys.length) ? `<div class="sp-item">
       <div class="sp-label">Competencies</div>
-      <div class="sp-val" id="sp_cp">—</div>
-      <div class="sp-sub">part of Role Effectiveness</div>
+      <div class="sp-wt">Within 40%</div>
+      <div class="sp-val" id="sp_cp">&mdash;</div>
+      <div class="sp-sub">Averaged into Role Effectiveness</div>
     </div>
     <div class="sp-divider"></div>` : ""}
-    <div class="sp-item"><div class="sp-label">Growth Potential</div><div class="sp-val" id="sp_gp">—</div></div>
+    <div class="sp-item">
+      <div class="sp-label">Growth Potential</div>
+      <div class="sp-wt">20%</div>
+      <div class="sp-val" id="sp_gp">&mdash;</div>
+    </div>
     <div class="sp-divider"></div>
-    <div class="sp-item"><div class="sp-label">Problem Solving</div><div class="sp-val" id="sp_ps">—</div></div>
+    <div class="sp-item">
+      <div class="sp-label">Problem Solving</div>
+      <div class="sp-wt">20%</div>
+      <div class="sp-val" id="sp_ps">&mdash;</div>
+    </div>
     <div class="sp-divider"></div>
-    <div class="sp-item"><div class="sp-label">Culture &amp; Collab</div><div class="sp-val" id="sp_cc">—</div></div>
+    <div class="sp-item">
+      <div class="sp-label">Culture &amp; Collaboration</div>
+      <div class="sp-wt">20%</div>
+      <div class="sp-val" id="sp_cc">&mdash;</div>
+    </div>
     <div class="sp-divider"></div>
-    <div class="sp-item" style="flex:1.6">
+    <div class="sp-item" style="flex:1.7">
       <div class="sp-label">${period} QOH Score</div>
-      <div class="sp-val" id="sp_final" style="font-size:28px;color:#0d4f3c">—</div>
+      <div class="sp-wt" style="background:#0d4f3c;color:#fff;border-color:#0d4f3c">Weighted total</div>
+      <div class="sp-val" id="sp_final" style="font-size:29px;color:#0d4f3c">&mdash;</div>
       <div class="sp-sub" id="sp_rating">Rate each section to see score</div>
     </div>
+  </div>
   </div>
 
   <div class="err-msg" id="errMsg"></div>
@@ -2708,7 +2729,12 @@ function updateScore(){
   // 180-Day only: technical competencies shown on their own, but they still
   // average into Role Effectiveness rather than carrying a separate weight.
   if(COMP_META && COMP_META.keys && COMP_META.keys.length) put("sp_cp", fmt(avg(COMP_META.keys)));
-  if(!sc.re.has) put("sp_w_re","nothing to rate in this section");
+  if(!sc.re.has){
+    // No objectives and no competencies: the 40% is spread over the other
+    // sections, so showing "40%" here would not match the score below.
+    put("sp_w_re","Nothing to rate in this section");
+    put("sp_wt_re","Not applicable");
+  }
 
   const sp=document.getElementById("sp_final"), sr=document.getElementById("sp_rating");
   if(!allSectionsRated(sc)){
@@ -3284,15 +3310,51 @@ const ASSESS_SECTIONS=[
     {area:"Function Fitment", q:"How effectively is the Altudian performing the core responsibilities of the role, and how confident are stakeholders in their ability to deliver?"}
   ]}
 ];
-function openAssessmentView(empId){
+// ── Recommendation scale, shown in the viewer and the printed record ───────
+const ASSESS_RECS=["Did Not Meet Hiring Expectations","Partially Met Hiring Expectations","Met Hiring Expectations","Exceeded Hiring Expectations","Significantly Exceeded Hiring Expectations"];
+// Section weights. Kept out of the manager's form on purpose, but HR needs to
+// see how a score was arrived at, so the printed record shows the arithmetic.
+const ASSESS_WEIGHTS=[
+  {key:"roleEffectiveness", label:"Role Effectiveness", w:0.40},
+  {key:"growthPotential",   label:"Growth Potential & Learning Ability", w:0.20},
+  {key:"problemSolving",    label:"Problem Solving & Ownership", w:0.20},
+  {key:"culture",           label:"Culture & Collaboration", w:0.20}
+];
+
+// The last document built, so the download button doesn't have to rebuild it.
+let _asmDoc=null;
+
+function _asmSecAvg(sec,key){
+  const r=(sec&&sec[key]&&sec[key].ratings)||[];
+  const v=r.map(x=>parseFloat(x)).filter(x=>!isNaN(x));
+  return v.length? v.reduce((s,x)=>s+x,0)/v.length : null;
+}
+
+function openAssessmentView(empId,period){
   const emp=EMPS.find(e=>e.id===empId); if(!emp) return;
-  const st=empStatus(emp); const a=st.asm;
+  const is180=/180/.test(String(period||""));
+  const PL=is180?"180-Day":"90-Day";
+  const st=is180?empStatus180(emp):empStatus(emp);
+  const a=st.asm;
   const ov=document.getElementById("viewAsmOverlay");
   const body=document.getElementById("viewAsmBody");
   const titleEl=document.getElementById("viewAsmTitle");
   const esc=s=>String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-  titleEl.textContent="90-Day Assessment — "+emp.name;
-  if(!a){ body.innerHTML='<p style="color:var(--ink3)">No submitted assessment found for this employee.</p>'; ov.classList.add("open"); return; }
+  titleEl.textContent=PL+" Assessment — "+emp.name;
+  const dlBtn=document.getElementById("viewAsmDl");
+  const prBtn=document.getElementById("viewAsmPrint");
+
+  if(!a){
+    _asmDoc=null;
+    if(dlBtn)dlBtn.style.display="none";
+    if(prBtn)prBtn.style.display="none";
+    body.innerHTML='<p style="color:var(--ink3)">No submitted '+PL+' assessment found for this employee.</p>';
+    ov.classList.add("open");
+    return;
+  }
+  if(dlBtn)dlBtn.style.display="";
+  if(prBtn)prBtn.style.display="";
+
   const ri=rI(a.finalScore||0);
   const sec=a.sections||{};
   const meaning=v=>{
@@ -3301,23 +3363,42 @@ function openAssessmentView(empId){
     return (n>=1&&n<=5)?(n+" — "+ASSESS_MEANING[n]):'<span style="color:var(--ink4)">Not rated</span>';
   };
 
-  const pos=(emp.performanceObjectives||[]);
-  const reR=(sec.roleEffectiveness&&sec.roleEffectiveness.ratings)||[];
-  let p1 = pos.length
-    ? pos.map((po,i)=>`<tr><td class="va-area">${esc(po.subCategory||("Performance Objective "+(i+1)))}</td><td class="va-q">${esc(po.objective||po.subCategory||"")}</td><td class="va-r">${meaning(reR[i])}</td></tr>`).join("")
-    : `<tr><td colspan="3" style="color:var(--ink4)">No performance objectives were defined for this employee.</td></tr>`;
-
-  const p2 = ASSESS_SECTIONS.map(s=>{
-    const rr=(sec[s.key]&&sec[s.key].ratings)||[];
-    const rows=s.areas.map((ar,i)=>`<tr><td class="va-area">${esc(ar.area)}</td><td class="va-q">${esc(ar.q)}</td><td class="va-r">${meaning(rr[i])}</td></tr>`).join("");
-    return `<tr class="va-cat"><td colspan="3">${esc(s.cat)}</td></tr>${rows}`;
-  }).join("");
-
   const hasDetail = !!(a.sections && [sec.roleEffectiveness,sec.growthPotential,sec.problemSolving,sec.culture]
       .some(x=>x&&Array.isArray(x.ratings)&&x.ratings.some(v=>parseFloat(v)>0)));
   const note = hasDetail ? "" :
-    `<div class="va-note">Question-by-question answers aren't stored for this assessment. They appear automatically once your Excel table has a <strong>RatingsDetail</strong> column (managers' forms already send it). The overall score, recommendation and comments below are always available.</div>`;
+    `<div class="va-note">Question-by-question answers aren't stored for this assessment. They appear automatically once your Excel table has a <strong>RatingsDetail</strong> column (managers' forms already send it). The score, recommendation and comments below are always available.</div>`;
 
+  /* ── 1. Score Breakdown (Weighted) ── */
+  const rowsW=ASSESS_WEIGHTS.map(x=>Object.assign({},x,{val:_asmSecAvg(sec,x.key)}));
+  const live=rowsW.filter(x=>x.val!==null);
+  const totalW=live.reduce((t,x)=>t+x.w,0);
+  const breakdown = live.length ? `
+    <div class="va-secttl">Score Breakdown (Weighted)</div>
+    <table class="va-tbl"><thead><tr><th>Section</th><th style="width:110px;text-align:center">Average</th><th style="width:100px;text-align:center">Weight</th><th style="width:130px;text-align:center">Contribution</th></tr></thead><tbody>
+    ${rowsW.map(x=>{
+      // Effective weight, not nominal: if a section had nothing to rate its
+      // share is spread over the others, and showing 40% next to "Not captured"
+      // would not add up to the score printed underneath.
+      const eff = x.val===null?0:(x.w/totalW);
+      return `<tr><td class="va-area">${esc(x.label)}</td>
+        <td style="text-align:center">${x.val===null?'<span style="color:var(--ink4)">Not captured</span>':x.val.toFixed(2)}</td>
+        <td style="text-align:center;color:var(--ink3)">${x.val===null?'&mdash;':Math.round(eff*100)+'%'}</td>
+        <td style="text-align:center" class="va-r">${x.val===null?'&mdash;':(x.val*eff).toFixed(2)}</td></tr>`;
+    }).join("")}
+    <tr style="background:#f8fafc"><td class="va-area">Final ${PL} QOH Score</td><td></td>
+      <td style="text-align:center;color:var(--ink3)">100%</td>
+      <td style="text-align:center" class="va-r"><strong>${(parseFloat(a.finalScore)||0).toFixed(2)}</strong></td></tr>
+    </tbody></table>
+    ${totalW<0.999?`<div class="va-note">One or more sections had nothing to rate for this employee, so their weight was spread across the remaining sections. The percentages above are the weights actually applied.</div>`:""}` : "";
+
+  /* ── 2. Rating Scale (Questions — Parts 1 & 2) ── */
+  const ratingScale = `
+    <div class="va-secttl">Rating Scale — Questions (Parts 1 &amp; 2)</div>
+    <table class="va-tbl"><thead><tr><th style="width:70px">Rating</th><th>Meaning</th></tr></thead><tbody>
+    ${[5,4,3,2,1].map(n=>`<tr><td class="va-area">${n}</td><td class="va-q">${esc(ASSESS_MEANING[n])}</td></tr>`).join("")}
+    </tbody></table>`;
+
+  /* ── 3. Project Details ── */
   const projects=Array.isArray(emp.projects)?emp.projects:[];
   const projHtml = projects.length ? `
     <div class="va-secttl">Project Details</div>
@@ -3325,26 +3406,395 @@ function openAssessmentView(empId){
       projects.map(p=>`<tr><td class="va-area">${esc(p.name||"—")}</td><td>${esc(p.start||"—")}</td><td>${esc(p.end||"—")}</td><td>${esc(p.pm||"—")}</td><td>${esc(p.dd||"—")}</td><td>${p.allocation?esc(String(p.allocation))+"%":"—"}</td></tr>`).join("")
     }</tbody></table>` : "";
 
-  body.innerHTML=`
+  /* ── 4. Part 1 ── */
+  const pos=(emp.performanceObjectives||[]);
+  const reR=(sec.roleEffectiveness&&sec.roleEffectiveness.ratings)||[];
+  const p1 = pos.length
+    ? pos.map((po,i)=>`<tr><td class="va-area">${esc(po.subCategory||("Performance Objective "+(i+1)))}</td><td class="va-q">${esc(po.objective||po.subCategory||"")}</td><td class="va-r">${meaning(reR[i])}</td></tr>`).join("")
+    : `<tr><td colspan="3" style="color:var(--ink4)">No performance objectives were defined for this employee.</td></tr>`;
+
+  /* ── 5. Part 2 ── */
+  const p2 = ASSESS_SECTIONS.map(s=>{
+    const rr=(sec[s.key]&&sec[s.key].ratings)||[];
+    const rows=s.areas.map((ar,i)=>`<tr><td class="va-area">${esc(ar.area)}</td><td class="va-q">${esc(ar.q)}</td><td class="va-r">${meaning(rr[i])}</td></tr>`).join("");
+    return `<tr class="va-cat"><td colspan="3">${esc(s.cat)}</td></tr>${rows}`;
+  }).join("");
+
+  /* ── 6. Overall Recommendation Scale ── */
+  const recScale = `
+    <div class="va-secttl">Overall Recommendation Scale</div>
+    <table class="va-tbl"><thead><tr><th style="width:70px">Rating</th><th>Meaning</th></tr></thead><tbody>
+    ${ASSESS_RECS.slice().reverse().map((l,i)=>`<tr><td class="va-area">${ASSESS_RECS.length-i}</td><td class="va-q">${esc(l)}</td></tr>`).join("")}
+    </tbody></table>`;
+
+  /* ── 7. Part 3 ── */
+  const recQ="Considering the Altudian's performance, potential, and fit so far, how would you assess the overall hiring outcome?";
+  const p3data=[["Overall Recommendation", recQ, a.overallRecommendation||a.recommendation||"\u2014"]];
+  if(is180){
+    if(a.hiringSuccess) p3data.push(["Hiring Success","How successful has this hire been overall?",String(a.hiringSuccess)]);
+    if(a.confirmationRecommendation) p3data.push(["Confirmation","Recommendation on confirming this Altudian.",String(a.confirmationRecommendation)]);
+  }
+  const p3rows=p3data.map(r=>`<tr><td class="va-area">${esc(r[0])}</td><td class="va-q">${esc(r[1])}</td><td class="va-r">${esc(r[2])}</td></tr>`).join("");
+
+  const meta=`
     <div class="va-meta">
       <div><span>Employee</span>${esc(emp.name)} · ${esc(emp.id)}</div>
+      <div><span>Department &amp; Role</span>${esc(emp.department||"—")} · ${esc(emp.designation||"—")}</div>
       <div><span>Assessed by</span>${esc(a.submittedBy||"—")}${a.submittedByEmail?" · "+esc(a.submittedByEmail):""}</div>
       <div><span>Date</span>${esc(fD(a.submittedDate)||a.submittedDate||"—")}</div>
-      <div><span>QOH Score</span><strong>${a.finalScore||"—"}</strong> &nbsp;<span class="bdg ${ri.c}">${ri.l}</span></div>
-    </div>
-    ${note}
-    ${projHtml}
-    <div class="va-secttl"><span class="part-num2">1</span> Role Effectiveness</div>
+      <div><span>${PL} QOH Score</span><strong>${a.finalScore||"—"}</strong> &nbsp;<span class="bdg ${ri.c}">${ri.l}</span></div>
+      <div><span>Period</span>${PL}</div>
+    </div>`;
+
+  const doc = meta + note + breakdown + ratingScale + projHtml
+    + `<div class="va-secttl"><span class="part-num2">1</span> Role Effectiveness</div>
     <table class="va-tbl"><thead><tr><th>Assessment Area</th><th>Objective</th><th style="width:150px">Rating</th></tr></thead><tbody>${p1}</tbody></table>
     <div class="va-secttl"><span class="part-num2">2</span> Manager Assessment</div>
-    <table class="va-tbl"><thead><tr><th>Assessment Area</th><th>Question</th><th style="width:150px">Rating</th></tr></thead><tbody>${p2}</tbody></table>
-    <div class="va-secttl">Overall Recommendation</div>
-    <div class="va-box">${esc(a.overallRecommendation||a.recommendation||"—")}</div>
+    <table class="va-tbl"><thead><tr><th>Assessment Area</th><th>Question</th><th style="width:150px">Rating</th></tr></thead><tbody>${p2}</tbody></table>`
+    + recScale
+    + `<div class="va-secttl"><span class="part-num2">3</span> Overall Recommendation</div>
+    <table class="va-tbl"><thead><tr><th>Assessment Area</th><th>Question</th><th style="width:190px">Response</th></tr></thead><tbody>${p3rows}</tbody></table>
     <div class="va-secttl">Manager Comments</div>
     <div class="va-box">${esc(a.comments||a.factorComments||"—")}</div>`;
+
+  body.innerHTML=doc;
+
+  // The PDF is drawn from structured data rather than scraped from the markup
+  // above — parsing our own HTML back out would break the moment the layout
+  // changes, and the two would drift apart silently.
+  const plain=v=>{
+    if(v==="nd"||v==="ND"||v==="Not Demonstrated Yet") return "Not Demonstrated Yet";
+    const k=parseInt(v);
+    return (k>=1&&k<=5)?(k+" \u2014 "+ASSESS_MEANING[k]):"Not rated";
+  };
+  _asmDoc={
+    html:doc, name:emp.name, id:emp.id, period:PL,
+    date:fD(a.submittedDate)||a.submittedDate||"",
+    data:{
+      department:emp.department||"\u2014", designation:emp.designation||"\u2014",
+      submittedBy:a.submittedBy||"\u2014", submittedByEmail:a.submittedByEmail||"",
+      score:(parseFloat(a.finalScore)||0).toFixed(2), band:ri.l,
+      note: hasDetail?null:"Question-by-question answers aren't stored for this assessment. They appear automatically once the Excel table has a RatingsDetail column. The score, recommendation and comments below are always available.",
+      breakdown: live.length?rowsW.map(x=>{
+        const eff=x.val===null?0:(x.w/totalW);
+        return [x.label, x.val===null?"Not captured":x.val.toFixed(2),
+                x.val===null?"\u2014":Math.round(eff*100)+"%",
+                x.val===null?"\u2014":(x.val*eff).toFixed(2)];
+      }):[],
+      redistributed: live.length>0 && totalW<0.999,
+      ratingScale:[5,4,3,2,1].map(k=>[String(k),ASSESS_MEANING[k]]),
+      projects: projects.map(x=>[x.name||"\u2014",x.start||"\u2014",x.end||"\u2014",x.pm||"\u2014",x.dd||"\u2014",x.allocation?String(x.allocation)+"%":"\u2014"]),
+      part1: pos.length
+        ? pos.map((po,i)=>[po.subCategory||("Performance Objective "+(i+1)), po.objective||po.subCategory||"", plain(reR[i])])
+        : [["\u2014","No performance objectives were defined for this employee.",""]],
+      part2: ASSESS_SECTIONS.map(x=>({cat:x.cat, rows:x.areas.map((ar,i)=>[ar.area, ar.q, plain(((sec[x.key]&&sec[x.key].ratings)||[])[i])])})),
+      recScale: ASSESS_RECS.slice().reverse().map((l,i)=>[String(ASSESS_RECS.length-i), l]),
+      part3: p3data,
+      comments: a.comments||a.factorComments||"\u2014"
+    }
+  };
   ov.classList.add("open");
 }
 function closeAssessmentView(){ document.getElementById("viewAsmOverlay").classList.remove("open"); }
+
+// ── Download / print the submitted form ────────────────────────────────────
+// No PDF library is loaded, and adding one for this would be a lot of weight
+// for one button. The browser's own print-to-PDF produces a cleaner, selectable,
+// correctly paginated document anyway — so we build a standalone page and hand
+// it to the print dialog. If popups are blocked we print from a hidden iframe
+// instead, and if even that fails the user still gets the HTML as a file.
+function _asmPrintCss(){
+  return `
+  *{box-sizing:border-box}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#0f172a;margin:0;padding:28px 30px;font-size:12.5px}
+  .doc-hdr{display:flex;align-items:flex-start;justify-content:space-between;border-bottom:2.5px solid #0d4f3c;padding-bottom:12px;margin-bottom:18px}
+  .doc-hdr h1{font-size:17px;margin:0 0 3px;color:#0d4f3c;letter-spacing:-.01em}
+  .doc-hdr .sub{font-size:11.5px;color:#64748b}
+  .va-meta{display:grid;grid-template-columns:1fr 1fr;gap:9px 24px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:13px 16px;margin-bottom:14px;font-size:12px}
+  .va-meta>div{display:flex;flex-direction:column;gap:2px}
+  .va-meta span{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8}
+  .va-secttl{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:800;color:#0d4f3c;margin:18px 0 7px;page-break-after:avoid}
+  .part-num2{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:5px;background:#0d4f3c;color:#fff;font-size:11px;font-weight:800}
+  .va-tbl{width:100%;border-collapse:collapse;font-size:11.5px;border:1px solid #e2e8f0;page-break-inside:auto}
+  .va-tbl tr{page-break-inside:avoid}
+  .va-tbl th{background:#f1f5f9;text-align:left;padding:7px 10px;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#64748b;border-bottom:1px solid #e2e8f0}
+  .va-tbl td{padding:7px 10px;border-bottom:1px solid #eef2f6;vertical-align:top}
+  .va-area{font-weight:700;width:190px}
+  .va-q{color:#475569}
+  .va-r{font-weight:700;color:#0d4f3c}
+  .va-cat td{background:#ecfdf5;font-weight:800;color:#0d4f3c;font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+  .va-box{border:1px solid #e2e8f0;border-radius:8px;padding:11px 13px;white-space:pre-wrap;background:#fff;min-height:34px}
+  .va-note{background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:8px;padding:9px 12px;font-size:11px;margin:10px 0}
+  .bdg{display:inline-block;padding:1px 8px;border-radius:20px;font-size:10px;font-weight:800;background:#e2e8f0;color:#334155}
+  .doc-ft{margin-top:22px;padding-top:10px;border-top:1px solid #e2e8f0;font-size:10px;color:#94a3b8;display:flex;justify-content:space-between}
+  @page{margin:14mm}`;
+}
+function _asmPrintDoc(){
+  if(!_asmDoc) return "";
+  const d=_asmDoc;
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${d.period} Assessment - ${d.name}</title><style>${_asmPrintCss()}</style></head><body>
+  <div class="doc-hdr">
+    <div><h1>${d.period} Review</h1>
+    <div class="sub">${d.name} &middot; ${d.id}${d.date?" &middot; submitted "+d.date:""}</div></div>
+    <div class="sub" style="text-align:right">Altudo<br>TalentLens</div>
+  </div>
+  ${d.html}
+  <div class="doc-ft"><span>${d.name} &middot; ${d.period} Assessment</span><span>Generated ${new Date().toLocaleDateString()}</span></div>
+  </body></html>`;
+}
+function _asmFileName(ext){
+  if(!_asmDoc) return "assessment."+ext;
+  return (_asmDoc.name||"assessment").replace(/[^\w\s-]/g,"").trim().replace(/\s+/g,"_")
+    + "_" + _asmDoc.period.replace("-","") + "_Assessment." + ext;
+}
+// ── Download the submitted form as a real PDF ──────────────────────────────
+// Drawn with jsPDF + autoTable rather than screenshotting the page: the text
+// stays selectable and searchable, tables repeat their headers across pages,
+// and the file lands in Downloads on one click instead of routing the user
+// through a print dialog. If the libraries fail to load (offline, blocked CDN)
+// we fall back to the print window so the button is never dead.
+const _PDF_G=[13,79,60], _PDF_INK=[15,23,42], _PDF_MUT=[100,116,139], _PDF_LINE=[226,232,240];
+
+function _pdfReady(){
+  return !!(window.jspdf && window.jspdf.jsPDF && window.jspdf.jsPDF.API && typeof window.jspdf.jsPDF.API.autoTable==="function");
+}
+function _pdfTableOpts(extra){
+  return Object.assign({
+    theme:"grid",
+    styles:{font:"helvetica",fontSize:8.5,cellPadding:5,lineColor:_PDF_LINE,lineWidth:.5,
+            textColor:_PDF_INK,overflow:"linebreak",valign:"top"},
+    headStyles:{fillColor:[241,245,249],textColor:[71,85,105],fontStyle:"bold",fontSize:7.5,lineWidth:.5,lineColor:_PDF_LINE},
+    alternateRowStyles:{fillColor:[250,251,253]},
+    margin:{top:52,left:40,right:40,bottom:44}
+  }, extra||{});
+}
+// Section heading that never strands itself at the foot of a page.
+function _pdfHeading(doc,text,y,num){
+  const H=doc.internal.pageSize.getHeight();
+  if(y > H-120){ doc.addPage(); y=64; }
+  if(num){
+    doc.setFillColor(_PDF_G[0],_PDF_G[1],_PDF_G[2]);
+    doc.roundedRect(40,y-9.5,15,15,3,3,"F");
+    doc.setTextColor(255,255,255); doc.setFont("helvetica","bold"); doc.setFontSize(9);
+    doc.text(String(num),47.5,y+1.2,{align:"center"});
+  }
+  doc.setTextColor(_PDF_G[0],_PDF_G[1],_PDF_G[2]);
+  doc.setFont("helvetica","bold"); doc.setFontSize(10.5);
+  doc.text(text, num?62:40, y+1);
+  return y+11;
+}
+function _pdfNote(doc,text,y){
+  const W=doc.internal.pageSize.getWidth();
+  doc.setFont("helvetica","normal"); doc.setFontSize(7.8);
+  const lines=doc.splitTextToSize(text, W-104);
+  const h=lines.length*9.6+13;
+  doc.setFillColor(255,251,235); doc.setDrawColor(253,230,138); doc.setLineWidth(.5);
+  doc.roundedRect(40,y,W-80,h,4,4,"FD");
+  doc.setTextColor(146,64,14);
+  doc.text(lines,52,y+13);
+  return y+h+10;
+}
+
+function buildAssessmentPdf(){
+  const d=_asmDoc, x=d.data;
+  const doc=new window.jspdf.jsPDF({unit:"pt",format:"a4",compress:true});
+  const W=doc.internal.pageSize.getWidth();
+
+  /* Masthead */
+  doc.setFillColor(_PDF_G[0],_PDF_G[1],_PDF_G[2]);
+  doc.rect(0,0,W,72,"F");
+  doc.setTextColor(255,255,255); doc.setFont("helvetica","bold"); doc.setFontSize(15.5);
+  doc.text(d.period+" Review",40,32);
+  doc.setFont("helvetica","normal"); doc.setFontSize(9.5); doc.setTextColor(190,225,208);
+  doc.text(d.name+"   \u00b7   "+d.id+(d.date?"   \u00b7   Submitted "+d.date:""),40,50);
+  doc.setFontSize(8); doc.text("ALTUDO",W-40,30,{align:"right"});
+  doc.text("TALENTLENS",W-40,42,{align:"right"});
+
+  /* Score band + who assessed */
+  let y=96;
+  doc.setFillColor(240,253,244); doc.setDrawColor(_PDF_G[0],_PDF_G[1],_PDF_G[2]); doc.setLineWidth(1);
+  doc.roundedRect(40,y,W-80,64,6,6,"FD");
+  doc.setTextColor(_PDF_MUT[0],_PDF_MUT[1],_PDF_MUT[2]);
+  doc.setFont("helvetica","bold"); doc.setFontSize(7);
+  doc.text("FINAL QOH SCORE",56,y+18);
+  doc.setTextColor(_PDF_G[0],_PDF_G[1],_PDF_G[2]); doc.setFontSize(28);
+  doc.text(x.score,56,y+50);
+  doc.setFontSize(9.5); doc.setFont("helvetica","bold");
+  doc.text(x.band,120,y+50);
+  const col2=W*0.52;
+  const pair=(lbl,val,yy)=>{
+    doc.setTextColor(_PDF_MUT[0],_PDF_MUT[1],_PDF_MUT[2]); doc.setFont("helvetica","bold"); doc.setFontSize(6.8);
+    doc.text(lbl,col2,yy);
+    doc.setTextColor(_PDF_INK[0],_PDF_INK[1],_PDF_INK[2]); doc.setFont("helvetica","normal"); doc.setFontSize(8.6);
+    doc.text(doc.splitTextToSize(String(val),W-col2-56)[0],col2,yy+11);
+  };
+  pair("ASSESSED BY",x.submittedBy,y+18);
+  pair("DEPARTMENT & ROLE",x.department+"  \u00b7  "+x.designation,y+41);
+  y+=78;
+
+  if(x.note) y=_pdfNote(doc,x.note,y);
+
+  /* 1. Score Breakdown (Weighted) */
+  if(x.breakdown.length){
+    y=_pdfHeading(doc,"Score Breakdown (Weighted)",y);
+    doc.autoTable(_pdfTableOpts({
+      startY:y,
+      head:[["Section","Average","Weight","Contribution"]],
+      body:x.breakdown.concat([[{content:"Final "+d.period+" QOH Score",styles:{fontStyle:"bold"}},"",
+        {content:"100%",styles:{halign:"center"}},
+        {content:x.score,styles:{halign:"center",fontStyle:"bold",textColor:_PDF_G}}]]),
+      columnStyles:{0:{cellWidth:200},1:{halign:"center"},2:{halign:"center",textColor:_PDF_MUT},3:{halign:"center",fontStyle:"bold",textColor:_PDF_G}},
+      didParseCell:c=>{ if(c.row.index===x.breakdown.length) c.cell.styles.fillColor=[248,250,252]; }
+    }));
+    y=doc.lastAutoTable.finalY+10;
+    if(x.redistributed) y=_pdfNote(doc,"One or more sections had nothing to rate for this employee, so their weight was spread across the remaining sections. The percentages above are the weights actually applied.",y);
+  }
+
+  /* 2. Rating Scale */
+  y=_pdfHeading(doc,"Rating Scale \u2014 Questions (Parts 1 & 2)",y);
+  doc.autoTable(_pdfTableOpts({
+    startY:y, head:[["Rating","Meaning"]], body:x.ratingScale,
+    columnStyles:{0:{cellWidth:52,halign:"center",fontStyle:"bold"}}
+  }));
+  y=doc.lastAutoTable.finalY+16;
+
+  /* 3. Project Details */
+  if(x.projects.length){
+    y=_pdfHeading(doc,"Project Details",y);
+    doc.autoTable(_pdfTableOpts({
+      startY:y, head:[["Project","Start","End","PM","DD","Allocation"]], body:x.projects,
+      styles:Object.assign(_pdfTableOpts().styles,{fontSize:8}),
+      columnStyles:{1:{cellWidth:62},2:{cellWidth:62},5:{cellWidth:62,halign:"center"}}
+    }));
+    y=doc.lastAutoTable.finalY+16;
+  }
+
+  /* 4. Part 1 */
+  y=_pdfHeading(doc,"Role Effectiveness",y,1);
+  doc.autoTable(_pdfTableOpts({
+    startY:y, head:[["Assessment Area","Objective","Rating"]], body:x.part1,
+    columnStyles:{0:{cellWidth:120,fontStyle:"bold"},2:{cellWidth:112,fontStyle:"bold",textColor:_PDF_G}}
+  }));
+  y=doc.lastAutoTable.finalY+16;
+
+  /* 5. Part 2 */
+  y=_pdfHeading(doc,"Manager Assessment",y,2);
+  const p2body=[];
+  x.part2.forEach(g=>{
+    p2body.push([{content:g.cat,colSpan:3,styles:{fillColor:[236,253,245],textColor:_PDF_G,fontStyle:"bold",fontSize:8}}]);
+    g.rows.forEach(r=>p2body.push(r));
+  });
+  doc.autoTable(_pdfTableOpts({
+    startY:y, head:[["Assessment Area","Question","Rating"]], body:p2body,
+    columnStyles:{0:{cellWidth:120,fontStyle:"bold"},2:{cellWidth:112,fontStyle:"bold",textColor:_PDF_G}}
+  }));
+  y=doc.lastAutoTable.finalY+16;
+
+  /* 6. Overall Recommendation Scale */
+  y=_pdfHeading(doc,"Overall Recommendation Scale",y);
+  doc.autoTable(_pdfTableOpts({
+    startY:y, head:[["Rating","Meaning"]], body:x.recScale,
+    columnStyles:{0:{cellWidth:52,halign:"center",fontStyle:"bold"}}
+  }));
+  y=doc.lastAutoTable.finalY+16;
+
+  /* 7. Part 3 */
+  y=_pdfHeading(doc,"Overall Recommendation",y,3);
+  doc.autoTable(_pdfTableOpts({
+    startY:y, head:[["Assessment Area","Question","Response"]], body:x.part3,
+    columnStyles:{0:{cellWidth:120,fontStyle:"bold"},2:{cellWidth:140,fontStyle:"bold",textColor:_PDF_G}}
+  }));
+  y=doc.lastAutoTable.finalY+16;
+
+  /* 8. Manager Comments */
+  y=_pdfHeading(doc,"Manager Comments",y);
+  doc.autoTable(_pdfTableOpts({
+    startY:y, body:[[x.comments]],
+    styles:Object.assign(_pdfTableOpts().styles,{cellPadding:9,fontSize:8.8,textColor:[51,65,85]})
+  }));
+
+  /* Footer + continuation rule on every page */
+  const total=doc.internal.getNumberOfPages(), H=doc.internal.pageSize.getHeight();
+  for(let i=1;i<=total;i++){
+    doc.setPage(i);
+    if(i>1){
+      doc.setDrawColor(_PDF_G[0],_PDF_G[1],_PDF_G[2]); doc.setLineWidth(1.6);
+      doc.line(40,34,W-40,34);
+      doc.setTextColor(_PDF_G[0],_PDF_G[1],_PDF_G[2]); doc.setFont("helvetica","bold"); doc.setFontSize(8);
+      doc.text(d.period+" Assessment \u00b7 "+d.name,40,28);
+    }
+    doc.setDrawColor(_PDF_LINE[0],_PDF_LINE[1],_PDF_LINE[2]); doc.setLineWidth(.5);
+    doc.line(40,H-30,W-40,H-30);
+    doc.setTextColor(148,163,184); doc.setFont("helvetica","normal"); doc.setFontSize(7.5);
+    doc.text(d.name+"  \u00b7  "+d.id+"  \u00b7  "+d.period+" Assessment",40,H-18);
+    doc.text("Page "+i+" of "+total,W-40,H-18,{align:"right"});
+  }
+  return doc;
+}
+
+function downloadAssessmentPdf(){
+  if(!_asmDoc){ toast("Nothing to download","Open a submitted assessment first."); return; }
+  if(!_pdfReady()){
+    toast("PDF tools unavailable","Opening the print view instead \u2014 choose \"Save as PDF\" there.");
+    _asmPrintFallback();
+    return;
+  }
+  try{
+    buildAssessmentPdf().save(_asmFileName("pdf"));
+    toast("Downloaded",_asmFileName("pdf"));
+  }catch(e){
+    console.error("PDF build failed",e);
+    toast("Couldn't build the PDF","Opening the print view instead \u2014 choose \"Save as PDF\" there.");
+    _asmPrintFallback();
+  }
+}
+
+// Print-window fallback, used only when jsPDF is unavailable.
+function _asmPrintFallback(){
+  if(!_asmDoc){ toast("Nothing to download","Open a submitted assessment first."); return; }
+  const html=_asmPrintDoc();
+  let win=null;
+  try{ win=window.open("","_blank"); }catch(e){ win=null; }
+  if(win&&win.document){
+    win.document.open(); win.document.write(html); win.document.close();
+    win.focus();
+    setTimeout(()=>{ try{ win.print(); }catch(e){} },350);
+    toast("Ready to save",'In the print dialog choose "Save as PDF" as the destination.');
+    return;
+  }
+  // Popup blocked — print from a hidden iframe in this page instead.
+  try{
+    const fr=document.createElement("iframe");
+    fr.style.cssText="position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden";
+    document.body.appendChild(fr);
+    fr.contentDocument.open(); fr.contentDocument.write(html); fr.contentDocument.close();
+    setTimeout(()=>{
+      try{ fr.contentWindow.focus(); fr.contentWindow.print(); }catch(e){}
+      setTimeout(()=>{ try{ document.body.removeChild(fr); }catch(e){} },1500);
+    },350);
+    toast("Ready to save",'In the print dialog choose "Save as PDF" as the destination.');
+  }catch(e){
+    downloadAssessmentHtml();
+  }
+}
+
+// Last resort (and useful on its own): a standalone file that opens anywhere.
+function downloadAssessmentHtml(){
+  if(!_asmDoc){ toast("Nothing to download","Open a submitted assessment first."); return; }
+  const blob=new Blob([_asmPrintDoc()],{type:"text/html;charset=utf-8"});
+  const url=URL.createObjectURL(blob);
+  const link=document.createElement("a");
+  link.href=url; link.download=_asmFileName("html");
+  document.body.appendChild(link); link.click(); document.body.removeChild(link);
+  setTimeout(()=>URL.revokeObjectURL(url),4000);
+  toast("Downloaded",_asmFileName("html"));
+}
+// Open a submitted form and go straight to the print dialog.
+function downloadSubmittedForm(empId,period){
+  openAssessmentView(empId,period);
+  if(_asmDoc) downloadAssessmentPdf();
+}
+
 function sCol(s){return s>=4?"#10b981":s>=3?"#f59e0b":"#ef4444";}
 
 // ── Init ─────────────────────────────────────────────────────────────────
@@ -3578,7 +4028,7 @@ function renderDash(){
 
     /* ── Empty state ── */
     if(!EMPS.length){
-      main.innerHTML='<div style="display:flex;align-items:center;justify-content:center;min-height:72vh"><div style="text-align:center;max-width:440px"><div style="font-size:48px;margin-bottom:16px">&#128101;</div><h2 style="font-size:22px;font-weight:800;margin-bottom:8px">Welcome to QualityHire</h2><p style="color:#64748b;margin-bottom:24px;line-height:1.7">Add your employee list to get started with 90-Day QOH tracking.</p><button class="btn btn-am" onclick="showView(\'employees\')" style="padding:12px 28px">&#8593; Import Employee List</button></div></div>';
+      main.innerHTML='<div style="display:flex;align-items:center;justify-content:center;min-height:72vh"><div style="text-align:center;max-width:440px"><div style="font-size:48px;margin-bottom:16px">&#128101;</div><h2 style="font-size:22px;font-weight:800;margin-bottom:8px">Welcome to TalentLens</h2><p style="color:#64748b;margin-bottom:24px;line-height:1.7">Add your employee list to get started with 90-Day QOH tracking.</p><button class="btn btn-am" onclick="showView(\'employees\')" style="padding:12px 28px">&#8593; Import Employee List</button></div></div>';
       return;
     }
 
@@ -3700,7 +4150,7 @@ function renderDash(){
       /* Page header */
       '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:6px">'
       +'<div>'
-      +'<h1 style="font-size:22px;font-weight:800;color:#0f172a;letter-spacing:-.02em;margin:0">QOH Dashboard</h1>'
+      +'<h1 style="font-size:22px;font-weight:800;color:#0f172a;letter-spacing:-.02em;margin:0">TalentLens Dashboard</h1>'
       +'<div style="display:flex;align-items:center;gap:16px;margin-top:6px">'
       +'<span style="font-size:13px;color:#64748b">'+empInView.length+' employees</span>'
       +'<span style="color:#e2e8f0">|</span>'
@@ -4411,7 +4861,7 @@ function downloadRecruiterTemplate(){
   ws3["!cols"]=[{wch:10},{wch:32},{wch:55}];
   XLSX.utils.book_append_sheet(wb,ws3,"Rating Scale");
 
-  XLSX.writeFile(wb,"QOH_Recruiter_Template_"+new Date().toISOString().slice(0,10)+".xlsx");
+  XLSX.writeFile(wb,"TalentLens_Recruiter_Template_"+new Date().toISOString().slice(0,10)+".xlsx");
   toast("Template Downloaded","Fill Employee Details and Performance Objectives sheets, then upload here.");
 }
 
@@ -4425,7 +4875,7 @@ function handleRecruiterUpload(file){
 
       // Parse Employee Details
       const ws1=wb.Sheets["Employee Details"];
-      if(!ws1){_showRecErr("Sheet 'Employee Details' not found. Please use the QualityHire template.");return;}
+      if(!ws1){_showRecErr("Sheet 'Employee Details' not found. Please use the TalentLens template.");return;}
       const rows1=XLSX.utils.sheet_to_json(ws1,{header:1,defval:""});
       const FIELD_MAP={
         "Employee Name":"name",
@@ -4487,7 +4937,7 @@ function handleRecruiterUpload(file){
       _recPreviewEmp=emp;
       _showRecPreview(emp);
     }catch(err){
-      _showRecErr("Could not read file: "+(err.message||"unknown error")+". Please use the downloaded QualityHire template.");
+      _showRecErr("Could not read file: "+(err.message||"unknown error")+". Please use the downloaded TalentLens template.");
     }
   };
   reader.readAsBinaryString(file);
@@ -4560,7 +5010,7 @@ function downloadObjectivesTemplate(){
   ws["!cols"]=[{wch:16},{wch:28},{wch:72}];
   ws["!merges"]=[{s:{r:0,c:0},e:{r:0,c:2}},{s:{r:1,c:0},e:{r:1,c:2}}];
   XLSX.utils.book_append_sheet(wb,ws,"Objectives");
-  XLSX.writeFile(wb,"QOH_Objectives_Template_"+new Date().toISOString().slice(0,10)+".xlsx");
+  XLSX.writeFile(wb,"TalentLens_Objectives_Template_"+new Date().toISOString().slice(0,10)+".xlsx");
 }
 function handleObjectivesUpload(file){
   if(!file)return;
@@ -4764,7 +5214,8 @@ function renderTracker(period){
           html+=`<td style="padding:10px 14px;border-bottom:1px solid #f1f5f9;white-space:nowrap;color:#64748b;font-size:12.5px">${asm?fD(asm.submittedDate):"-"}</td>
             <td style="padding:10px 14px;border-bottom:1px solid #f1f5f9;text-align:center">
               <strong style="font-size:15px;color:#0f172a">${asm?asm.finalScore.toFixed(2):"-"}</strong></td>
-            <td style="padding:10px 14px;border-bottom:1px solid #f1f5f9;text-align:center">${ri?`<span class="bdg ${ri.c}">${ri.l}</span>`:"-"}</td>`;
+            <td style="padding:10px 14px;border-bottom:1px solid #f1f5f9;text-align:center">${ri?`<span class="bdg ${ri.c}">${ri.l}</span>`:"-"}
+              ${asm?`<button class="btn btn-ghost btn-sm" style="margin-left:6px;padding:2px 7px" title="Download this submitted form" onclick="downloadSubmittedForm('${escH(emp.id)}','${PL}-Day')">&#8595;</button>`:""}</td>`;
         }else{
           let tl="";
           if(sec.key==="Ongoing"){
@@ -5354,6 +5805,7 @@ function renderPending(){
           actionHtml=`<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
             <span style="font-size:12px;color:#059669">&#10003; Assessed ${fD(st.asm&&st.asm.submittedDate)}</span>
             <button class="btn btn-ghost btn-sm" data-viewasm="${emp.id}" title="View the completed assessment form">&#128065; View</button>
+            <button class="btn btn-ghost btn-sm" data-dlasm="${emp.id}" title="Download the submitted form as a PDF">&#8595;</button>
           </div>`;
         }else{
           actionHtml=`<span style="font-size:12px;color:#94a3b8">Upcoming ${fD(st.day90)}</span>`;
@@ -5386,6 +5838,7 @@ function renderPending(){
     pT.querySelectorAll("[data-remind-follow]").forEach(btn=>{btn.addEventListener("click",()=>sendReminderToEmp(btn.dataset.remindFollow,'reminder'));});
     pT.querySelectorAll("[data-genform]").forEach(btn=>{btn.addEventListener("click",()=>downloadEmployeeForm(btn.dataset.genform));});
     pT.querySelectorAll("[data-viewasm]").forEach(btn=>{btn.addEventListener("click",()=>openAssessmentView(btn.dataset.viewasm));});
+    pT.querySelectorAll("[data-dlasm]").forEach(btn=>{btn.addEventListener("click",()=>downloadSubmittedForm(btn.dataset.dlasm,"90-Day"));});
     pT.querySelectorAll("[data-tgl]").forEach(btn=>{btn.addEventListener("click",()=>toggleAutoEmp(btn.dataset.tgl));});
   }
 }
@@ -5897,7 +6350,7 @@ function doImport(file){
 function setImpMsg(t,x){const el=document.getElementById("impMsg");if(!el)return;el.innerHTML=`<div class="ial ial-${t==="ok"?"ok":"err"}">${t==="ok"?"&#10003;":"&#10007;"} ${x}</div>`;}
 function exportEmps(){const ws2=XLSX.utils.json_to_sheet(EMPS.map(e=>{const st=empStatus(e);return{...e,"90-Day Date":fD(st.day90),"QOH Status":st.s};}));const wb2=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb2,ws2,"Employees");XLSX.writeFile(wb2,"employees_with_status.xlsx");}
 
-// (Score Tracker view removed — 90-Day Quality of Hire only)
+// (Score Tracker view removed — 90-Day reviews only)
 
 // ── REPORTS ───────────────────────────────────────────────────────────────
 function renderReports(){
@@ -6016,8 +6469,11 @@ function expEmpStatus(){const pickF=(a,keys)=>{for(const k of keys){if(a&&a[k]!=
 <div class="overlay" id="viewAsmOverlay" onclick="if(event.target===this)closeAssessmentView()">
   <div class="modal" style="max-width:880px">
     <div class="modal-hdr">
-      <div class="modal-title" id="viewAsmTitle">90-Day Assessment</div>
-      <button class="modal-x" onclick="closeAssessmentView()">&#215;</button>
+      <div class="modal-title" id="viewAsmTitle">Assessment</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button class="btn btn-am btn-sm" id="viewAsmDl" onclick="downloadAssessmentPdf()" title="Save this submitted form as a PDF">&#8595; Download PDF</button>
+        <button class="modal-x" onclick="closeAssessmentView()">&#215;</button>
+      </div>
     </div>
     <div id="viewAsmBody"></div>
   </div>
