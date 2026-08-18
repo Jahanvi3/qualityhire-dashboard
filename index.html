@@ -3203,6 +3203,22 @@ async function runAuto180Scheduler(force){
 // ── AUTOMATIC EMAIL ENGINE (disabled — use manual send buttons instead) ─────
 let AUTO_LAST_RUN=0;
 async function runAutoEmailScheduler(force){ return; /* auto-send disabled */ }
+// Sending ahead of the milestone is legitimate — managers often want the form
+// in hand before the date, and nothing in the send path depends on the date
+// having passed. It was only ever the UI that hid the buttons. Confirmation is
+// asked for here (and nowhere else) because this is the one send that is
+// off-schedule, so a misclick should be recoverable.
+function sendEarly(empId,is180){
+  const emp=EMPS.find(e=>e.id===empId); if(!emp) return;
+  const st=is180?empStatus180(emp):empStatus(emp);
+  const days=is180?st.daysTo180:st.daysTo90;
+  const day =is180?st.day180  :st.day90;
+  const per =is180?"180-day":"90-day";
+  const when=(days>0)?(days+" day"+(days===1?"":"s")+" away, on "+fD(day)):"today";
+  if(!confirm(emp.name+"'s "+per+" milestone is "+when+".\n\nSend the review email to "
+      +(emp.managerEmail||"their manager")+" now anyway?")) return;
+  if(is180) send180ToEmp(empId,"initial"); else sendReminderToEmp(empId,"initial");
+}
 function sendReminderToEmp(empId, kind){
   const emp=EMPS.find(e=>e.id===empId); if(!emp)return;
   // Auto-send via Power Automate (email + attached form). The payload carries a
@@ -5656,9 +5672,11 @@ function renderConnect180(){
             ${npo?`<button class="btn btn-ghost btn-sm" data-f180="${emp.id}" title="Download a fresh prefilled 180-Day form">&#8595; Form</button>`:""}
           </div>`;
         }else{
-          actionHtml=`<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-            <span style="font-size:12px;color:#94a3b8">Upcoming ${fD(st.day180)}</span>
+          actionHtml=`<div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">
+            <span style="font-size:11.5px;color:#94a3b8;white-space:nowrap">Due ${fD(st.day180)}${st.daysTo180>0?` &middot; ${st.daysTo180}d`:""}</span>
+            <button class="btn btn-ghost btn-sm" onclick="sendEarly('${escH(emp.id)}',true)" title="Send the first email now, ahead of the 180-day milestone">&#9993; Send Early</button>
             ${npo?`<button class="btn btn-ghost btn-sm" data-f180="${emp.id}" title="Download this employee's prefilled 180-Day form early">&#8595; Form</button>`:""}
+            <button class="btn btn-ghost btn-sm" data-m180="${emp.id}" title="Preview / copy the email">&#128203; Draft</button>
           </div>`;
         }
         const initSent=log.initialSentAt?`<span class="bdg b-g" title="First-time email sent">&#10003; ${fD(log.initialSentAt)}</span>`:'<span style="color:#cbd5e1">—</span>';
@@ -5808,7 +5826,12 @@ function renderPending(){
             <button class="btn btn-ghost btn-sm" data-dlasm="${emp.id}" title="Download the submitted form as a PDF">&#8595;</button>
           </div>`;
         }else{
-          actionHtml=`<span style="font-size:12px;color:#94a3b8">Upcoming ${fD(st.day90)}</span>`;
+          actionHtml=`<div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">
+            <span style="font-size:11.5px;color:#94a3b8;white-space:nowrap">Due ${fD(st.day90)}${st.daysTo90>0?` &middot; ${st.daysTo90}d`:""}</span>
+            <button class="btn btn-ghost btn-sm" onclick="sendEarly('${escH(emp.id)}',false)" title="Send the first email now, ahead of the 90-day milestone">&#9993; Send Early</button>
+            <button class="btn btn-ghost btn-sm" data-genform="${emp.id}" title="Download this employee's prefilled 90-Day form">&#8595; Form</button>
+            <button class="btn btn-ghost btn-sm" data-msgid="${emp.id}" title="Preview / copy the email">&#128203; Draft</button>
+          </div>`;
         }
         const initSent=log.initialSentAt?`<span class="bdg b-g" title="First-time email sent">&#10003; ${fD(log.initialSentAt)}</span>`:'<span style="color:#cbd5e1">—</span>';
         const remSent=log.lastSent?fD(log.lastSent):'<span style="color:#cbd5e1">—</span>';
