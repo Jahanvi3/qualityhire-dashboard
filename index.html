@@ -873,6 +873,26 @@ function _pick(r,keys){
   }
   return "";
 }
+// ── Email normalisation ──────────────────────────
+// Manager emails come from Excel and are rarely clean: "Name <a@b.co>",
+// "a@b.co; c@d.co", a stray "mailto:", or a non-breaking space pasted out of
+// Outlook. The form used to hide this field whenever the record held ANY
+// value, so a malformed one produced "That email address doesn't look right"
+// against an input the manager could not see or correct -- the form could
+// never be submitted. Clean the value first, and only hide the field when
+// what we hold is actually usable.
+function _cleanEmail(v){
+  var t=String(v==null?"":v).replace(/\u00a0/g," ").trim();
+  if(!t) return "";
+  t=t.replace(/^mailto:/i,"");
+  var m=t.match(/<([^<>]+)>/);          // "Name <a@b.co>"
+  if(m) t=m[1];
+  t=t.split(/[;,]/)[0];                 // first address of a list
+  return t.replace(/\s+/g,"").trim();
+}
+function _validEmail(v){
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(_cleanEmail(v));
+}
 function rowToEmp(r){
   const e={
     id:String(_pick(r,["EmployeeId","employeeId","Employee ID","id"])),
@@ -2370,10 +2390,10 @@ tr.needs-input td{background:#fef2f2 !important}
 <!-- ── Assessor Details + Submit ── -->
 <div class="assessor">
   <input type="hidden" id="af_date" value="${new Date().toISOString().slice(0,10)}">
-  ${(emp.manager&&emp.managerEmail)?`
-  <!-- Both known from the employee record, so don't make the manager retype them. -->
+  ${(emp.manager&&_validEmail(emp.managerEmail))?`
+  <!-- Both known and usable, so don't make the manager retype them. -->
   <input type="hidden" id="af_name" value="${escH(emp.manager)}">
-  <input type="hidden" id="af_email" value="${escH(emp.managerEmail)}">`:`
+  <input type="hidden" id="af_email" value="${escH(_cleanEmail(emp.managerEmail))}">`:`
   <!-- Missing on the employee record, so ASK — otherwise validation would block
        submission on a field the manager cannot see or correct. -->
   <div class="af-group" style="margin-bottom:14px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px">
@@ -2381,7 +2401,7 @@ tr.needs-input td{background:#fef2f2 !important}
     <label class="af-lbl">Your Name *</label>
     <input class="af-in" id="af_name" value="${escH(emp.manager||"")}" placeholder="Your full name" style="margin-bottom:8px">
     <label class="af-lbl">Your Email *</label>
-    <input class="af-in" id="af_email" type="email" value="${escH(emp.managerEmail||"")}" placeholder="you@altudo.co">
+    <input class="af-in" id="af_email" type="email" value="${escH(_cleanEmail(emp.managerEmail))}" placeholder="you@altudo.co">
   </div>`}
   <div class="af-group" style="margin-bottom:18px">
     <label class="af-lbl">Additional Comments / Observations (optional)</label>
@@ -2451,6 +2471,38 @@ tr.needs-input td{background:#fef2f2 !important}
 </div><!-- end .page -->
 
 <script>
+// ── Sign-off email helpers ──────────────────────
+function _cleanEmail(v){
+  var t=String(v==null?"":v).replace(/\u00a0/g," ").trim();
+  if(!t) return "";
+  t=t.replace(/^mailto:/i,"");
+  var m=t.match(/<([^<>]+)>/); if(m) t=m[1];
+  t=t.split(/[;,]/)[0];
+  return t.replace(/\s+/g,"").trim();
+}
+function _validEmail(v){ return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(_cleanEmail(v)); }
+// If the address we prefilled turns out to be unusable, promote the hidden
+// inputs into a visible block so the manager can correct them and submit. A
+// blocking error against an invisible field is a dead end.
+function _revealSignoff(){
+  var e=document.getElementById("af_email");
+  if(!e || e.type!=="hidden") return;
+  var nm=document.getElementById("af_name");
+  var box=document.createElement("div");
+  box.className="af-group";
+  box.style.cssText="margin-bottom:14px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px";
+  var h=document.createElement("div");
+  h.style.cssText="font-size:12px;color:#92400e;font-weight:700;margin-bottom:8px";
+  h.textContent="⚑ We couldn't use the contact details on file — please confirm them";
+  box.appendChild(h);
+  e.parentNode.insertBefore(box,e);
+  var lbl=function(t){ var l=document.createElement("label"); l.className="af-lbl"; l.textContent=t; return l; };
+  if(nm){ box.appendChild(lbl("Your Name *")); nm.type="text"; nm.className="af-in"; nm.style.marginBottom="8px"; box.appendChild(nm); }
+  box.appendChild(lbl("Your Email *"));
+  e.type="email"; e.className="af-in"; box.appendChild(e);
+  e.classList.add("needs-input");
+}
+
 // ── Form state ─────────────────────────────────────────────────────────────
 const RE_KEYS  = ${JSON.stringify(reKeys)};
 const GP_KEYS  = ${JSON.stringify(_QS.gp.map(x=>x.key))};
@@ -2535,7 +2587,13 @@ function saveDraft(){
   if(_submitted) return;
   try{
     var d={};
-    _fields().forEach(function(el){ var k=el.id||el.name; if(k&&el.value) d[k]=el.value; });
+    _fields().forEach(function(el){
+      var k=el.id||el.name; if(!k||!el.value) return;
+      // Hidden sign-off fields come from the employee record, not the manager.
+      // Saving them lets a stale copy outlive the record it came from.
+      if((k==="af_name"||k==="af_email") && el.type==="hidden") return;
+      d[k]=el.value;
+    });
     document.querySelectorAll('.seg-wrap').forEach(function(w){
       var key=(w.id||"").replace("rw_","");
       var hid=document.getElementById("rv_"+key);
@@ -2563,7 +2621,20 @@ function restoreDraft(){
         if(name){ segPick(k,val,name); n++; return; } }
     }
     var el=document.getElementById(k)||document.querySelector('[name="'+k+'"]');
-    if(el){ el.value=d[k]; n++; }
+    if(!el) return;
+    // DRAFT_KEY is scoped to employee+period, NOT to the form file. A value
+    // typed into an older copy of the form therefore survives every
+    // regeneration and gets written back over the freshly built one. For the
+    // sign-off fields that was fatal: a bad address saved months ago kept
+    // overwriting the correct hidden value, so the form failed validation
+    // against a field the manager could not see, and resending a corrected
+    // form changed nothing. The record wins; a draft never overrides it.
+    if(k==="af_email"){
+      if(el.type==="hidden") return;
+      if(!_validEmail(d[k])) return;
+    }
+    if(k==="af_name" && el.type==="hidden") return;
+    el.value=d[k]; n++;
   });
   if(n){
     var when=d._t?new Date(d._t).toLocaleString():"earlier";
@@ -2786,13 +2857,14 @@ async function submitForm(){
 
   const nameEl=document.getElementById("af_name"), emailEl=document.getElementById("af_email"), dateEl=document.getElementById("af_date");
   const name=nameEl?nameEl.value.trim():"";
-  const email=emailEl?emailEl.value.trim():"";
+  const email=_cleanEmail(emailEl?emailEl.value:"");
   const date=(dateEl&&dateEl.value)?dateEl.value:new Date().toISOString().slice(0,10);
 
   // Without these HR cannot tell who assessed whom — previously both were optional.
   if(!name){ errors.push("Please enter your name so HR knows who completed this assessment."); if(nameEl) nameEl.classList.add("needs-input"); }
-  if(!email){ errors.push("Please enter your email address."); if(emailEl) emailEl.classList.add("needs-input"); }
-  else if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ errors.push("That email address doesn't look right \u2014 please check it."); if(emailEl) emailEl.classList.add("needs-input"); }
+  if(!email){ errors.push("Please enter your email address."); _revealSignoff(); if(emailEl) emailEl.classList.add("needs-input"); }
+  else if(!_validEmail(email)){ errors.push("That email address doesn't look right \u2014 please check it."); _revealSignoff(); if(emailEl) emailEl.classList.add("needs-input"); }
+  if(!name) _revealSignoff();
 
   if(errors.length){
     errEl.innerHTML=errors.map(function(e){return "\u2022 "+e;}).join("<br>");
