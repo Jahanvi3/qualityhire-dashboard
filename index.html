@@ -954,7 +954,8 @@ function rowToAsm(r){
       roleEffectiveness:{ratings:Array.isArray(p.re)?p.re:[]},
       growthPotential:{ratings:Array.isArray(p.gp)?p.gp:[]},
       problemSolving:{ratings:Array.isArray(p.ps)?p.ps:[]},
-      culture:{ratings:Array.isArray(p.cc)?p.cc:[]}
+      culture:{ratings:Array.isArray(p.cc)?p.cc:[]},
+      competencyJustifications:(p.cj&&typeof p.cj==="object")?p.cj:{}
     };
   }catch(e){} }
   // Reconstruct project details if present
@@ -1882,6 +1883,17 @@ function buildEmployeeForm(emp, period){
   // horizontal row of level buttons (F B I A E + —). The definition appears in
   // a SINGLE line below, updating as the rater hovers or selects — progressive
   // disclosure, so they read one thing at a time, not a wall of six.
+  function _compJustifyBox(key, comp){
+    // An above-required rating is the one competency judgement that carries
+    // real weight (it lifts the score to 4 or 5), so it has to be evidenced.
+    // Rendered for every competency but revealed only when the rating goes
+    // above the bar, so nothing moves around as the manager works down the list.
+    if(!comp || !comp.target) return "";
+    return `<div class="cj-wrap" id="cj_${key}" style="display:none;margin-top:8px">
+      <label class="cj-lbl">Rated above the required level &mdash; please give an example <span style="color:#dc2626">*</span></label>
+      <textarea class="cj-in" id="cj_in_${key}" rows="2" placeholder="What has this person done that demonstrates a level beyond ${escH(comp.target)}?" oninput="cjTouch('${escJS(key)}')"></textarea>
+    </div>`;
+  }
   function compCards(key, comp){
     const lv=(comp&&comp.levels)||{};
     const tgt=comp&&comp.target||"";
@@ -1902,6 +1914,7 @@ function buildEmployeeForm(emp, period){
       </div>
       <div class="seg-def" id="segdef_${key}"><span class="seg-def-hint">Tap a level to rate &mdash; hover to preview what each means</span></div>
       <input type="hidden" id="rv_${key}" value="">
+      ${_compJustifyBox(key, comp)}
     </div>`;
   }
   const _PROF_LABEL_FULL={F:"Foundation",B:"Basic",I:"Intermediate",A:"Advanced",E:"Excellent",nd:"Not Demonstrated Yet",
@@ -2106,6 +2119,10 @@ function buildEmployeeForm(emp, period){
   // competencies, averaged together into the same 40% weight.
   const _compForKeys = _is180 ? competenciesForEmp(emp) : null;
   const _compKeys = _compForKeys ? _compForKeys.list.map(c=>"cp_"+c.i) : [];
+  // Required level per competency key, so the form can score the GAP rather
+  // than the raw ladder value (see compScoreFor).
+  const _compTargets = {};
+  if(_compForKeys) _compForKeys.list.forEach(function(c){ _compTargets["cp_"+c.i]=c.target||""; });
   // HR may have rated some competencies already. Resolve those names to the
   // form's own keys and values here, where _PROF_V is in scope, so the form
   // just has to apply them.
@@ -2290,6 +2307,10 @@ tr.needs-input td{background:#fef2f2 !important}
 /* Labels wrap to two lines at some widths; a fixed block keeps every score on
    the same baseline instead of stair-stepping across the bar. */
 .sp-label{font-size:9.5px;font-weight:800;color:#065f46;text-transform:uppercase;letter-spacing:.08em;line-height:1.25;min-height:24px;display:flex;align-items:center;justify-content:center}
+.cj-lbl{display:block;font-size:11px;font-weight:700;color:#92400e;margin-bottom:5px}
+.cj-in{width:100%;padding:8px 11px;border-radius:8px;border:1.5px solid #fcd34d;background:#fffbeb;font-size:13px;font-family:inherit;color:#0f172a;outline:none;resize:vertical}
+.cj-in:focus{border-color:#f59e0b;background:#fff}
+.cj-wrap.needs-input .cj-in{border-color:#dc2626;background:#fef2f2}
 .sp-wt{font-size:9px;font-weight:800;color:#047857;background:rgba(255,255,255,.75);border:1px solid #a7f3d0;border-radius:20px;padding:1.5px 8px;letter-spacing:.05em;margin:5px 0 7px;white-space:nowrap}
 .sp-val{font-size:23px;font-weight:800;color:#0f172a;line-height:1}
 .sp-sub{font-size:10px;color:#6b7280;margin-top:5px;line-height:1.35}
@@ -2493,6 +2514,25 @@ tr.needs-input td{background:#fef2f2 !important}
 
 <script>
 const COMP_PREFILL = ${JSON.stringify(_prefill)};
+const COMP_TARGETS = ${JSON.stringify(_compTargets)};
+const _PROF_RANK_F=function(l){ return {Foundation:1,Basic:2,Intermediate:3,Advanced:4,Excellent:5}[l]||0; };
+const _COMP_LVL_F={1:"Foundation",2:"Basic",3:"Intermediate",4:"Advanced",5:"Excellent"};
+// Same rule the dashboard uses: a competency scores on its distance from the
+// level required for this designation, so meeting the bar is always a 3
+// whether the bar is Basic or Advanced.
+function _compScoreF(val,key){
+  if(val===null||val===undefined||val==="") return null;
+  if(val==="nd") return null;
+  var a=_PROF_RANK_F(_COMP_LVL_F[parseInt(val)]||"");
+  var t=_PROF_RANK_F(COMP_TARGETS[key]||"");
+  if(!a||!t) return null;
+  var gap=a-t;
+  if(gap>=2) return 5;
+  if(gap===1) return 4;
+  if(gap===0) return 3;
+  if(gap===-1) return 2;
+  return 1;
+}
 // Ratings HR set before sending. Applied through the normal selection path so
 // the form behaves exactly as if the manager had clicked them, and applied
 // BEFORE any draft restores, so the manager's own work always wins.
@@ -2599,6 +2639,47 @@ function segShowDef(key,name,selected){
   box.className="seg-def"+(selected?" chosen":"")+(gap?" gap":"");
   box.innerHTML='<span class="seg-def-lvl">'+(full[name]||name)+(selected?' &#10003;':'')+(gap?' <span class="seg-gap-tag">below required</span>':'')+'</span> '+esc(txt);
 }
+// Show or hide a competency's justification box. Above the required level the
+// box is mandatory; drop back to or below the bar and it is hidden again, and
+// anything already typed is kept in case the manager changes their mind back.
+function cjSync(key){
+  var box=document.getElementById("cj_"+key); if(!box) return;
+  var hid=document.getElementById("rv_"+key);
+  var need=false;
+  if(hid && hid.value && hid.value!=="nd" && typeof COMP_TARGETS!=="undefined"){
+    var a=_PROF_RANK_F(_COMP_LVL_F[parseInt(hid.value)]||"");
+    var t=_PROF_RANK_F(COMP_TARGETS[key]||"");
+    need = !!(a && t && a>t);
+  }
+  box.style.display=need?"block":"none";
+  if(!need) box.classList.remove("needs-input");
+}
+function cjTouch(key){
+  var box=document.getElementById("cj_"+key);
+  if(box && (document.getElementById("cj_in_"+key)||{}).value.trim().length>=10) box.classList.remove("needs-input");
+  if(typeof saveDraft==="function") saveDraft();
+}
+// Every competency rated above its bar, with no usable justification yet.
+function cjMissing(){
+  var out=[];
+  (typeof COMP_META!=="undefined" && COMP_META && COMP_META.keys ? COMP_META.keys : []).forEach(function(k){
+    var box=document.getElementById("cj_"+k);
+    if(!box || box.style.display==="none") return;
+    var ta=document.getElementById("cj_in_"+k);
+    if(!ta || ta.value.trim().length<10) out.push(k);
+  });
+  return out;
+}
+function cjCollect(){
+  var out={};
+  (typeof COMP_META!=="undefined" && COMP_META && COMP_META.names ? COMP_META.names : []).forEach(function(nm,i){
+    var k=COMP_META.keys[i];
+    var ta=document.getElementById("cj_in_"+k);
+    var box=document.getElementById("cj_"+k);
+    if(ta && box && box.style.display!=="none" && ta.value.trim()) out[nm]=ta.value.trim();
+  });
+  return out;
+}
 function segPick(key,val,name){
   var w=document.getElementById("rw_"+key); if(!w) return;
   w.querySelectorAll(".seg").forEach(function(b){ b.classList.toggle("on", b.getAttribute("data-v")===String(val)); });
@@ -2606,6 +2687,7 @@ function segPick(key,val,name){
   if(hid){ hid.value=val; hid.setAttribute("data-lvl",name); }
   w.classList.remove("needs-input");
   segShowDef(key,name,true);
+  if(key.indexOf("cp_")===0 && typeof cjSync==="function") cjSync(key);
   if(typeof updateScore==="function") updateScore();
   if(typeof updateProgress==="function") updateProgress();
   if(typeof autoAdvance==="function") autoAdvance();
@@ -2794,7 +2876,15 @@ function pickConf(sel){
 }
 
 function avg(keys){
-  const vals=keys.map(k=>{const h=document.getElementById("rv_"+k);if(!h||!h.value)return null;const n=parseFloat(h.value);return isNaN(n)?null:n;}).filter(v=>v!==null);
+  const vals=keys.map(k=>{
+    const h=document.getElementById("rv_"+k);
+    if(!h||!h.value) return null;
+    // Competencies are stored as their proficiency level but scored on the
+    // gap to the required level for this designation.
+    if(k.indexOf("cp_")===0) return _compScoreF(h.value,k);
+    const n=parseFloat(h.value);
+    return isNaN(n)?null:n;
+  }).filter(v=>v!==null);
   if(!vals.length)return null;
   return vals.reduce((s,v)=>s+v,0)/vals.length;
 }
@@ -2903,6 +2993,16 @@ async function submitForm(){
   if(!email){ errors.push("Please enter your email address."); _revealSignoff(); if(emailEl) emailEl.classList.add("needs-input"); }
   else if(!_validEmail(email)){ errors.push("That email address doesn't look right \u2014 please check it."); _revealSignoff(); if(emailEl) emailEl.classList.add("needs-input"); }
   if(!name) _revealSignoff();
+  // An above-required rating lifts the score, so it must be evidenced.
+  var _cjm=(typeof cjMissing==="function")?cjMissing():[];
+  if(_cjm.length){
+    errors.push(_cjm.length+" competenc"+(_cjm.length===1?"y is":"ies are")+" rated above the required level and still need a short justification (at least 10 characters).");
+    _cjm.forEach(function(k){
+      var b=document.getElementById("cj_"+k); if(b) b.classList.add("needs-input");
+    });
+    var first=document.getElementById("cj_"+_cjm[0]);
+    if(first && first.scrollIntoView) try{ first.scrollIntoView({behavior:"smooth",block:"center"}); }catch(e){}
+  }
 
   if(errors.length){
     errEl.innerHTML=errors.map(function(e){return "\u2022 "+e;}).join("<br>");
@@ -2939,7 +3039,7 @@ async function submitForm(){
     ExtensionReason: IS_180 ? (document.getElementById("conf_reason")||{}).value||"" : "",
     Practice: COMP_META ? COMP_META.practice : "",
     CompetencyRatings: COMP_META ? JSON.stringify(COMP_META.names.map((n,j)=>({competency:n, requiredLevel:COMP_META.targets[j]||"", rating:PROF_LABEL[getValStr(COMP_META.keys[j])]||getValStr(COMP_META.keys[j])}))) : "",
-    RatingsDetail:JSON.stringify({re:RE_KEYS.map(getValStr),gp:GP_KEYS.map(getValStr),ps:PS_KEYS.map(getValStr),cc:CC_KEYS.map(getValStr),practice:COMP_META?COMP_META.practice:""})
+    RatingsDetail:JSON.stringify({re:RE_KEYS.map(getValStr),gp:GP_KEYS.map(getValStr),ps:PS_KEYS.map(getValStr),cc:CC_KEYS.map(getValStr),practice:COMP_META?COMP_META.practice:"",cj:cjCollect()})
   };
   // Section-based JSON (used ONLY as a fallback if the backend can't be reached)
   const result={ assessments:[{
@@ -2951,7 +3051,8 @@ async function submitForm(){
       growthPotential:{score:Math.round(gpScore*100)/100, ratings:GP_KEYS.map(getVal)},
       problemSolving:{score:Math.round(psScore*100)/100, ratings:PS_KEYS.map(getVal)},
       culture:{score:Math.round(ccScore*100)/100, ratings:CC_KEYS.map(getVal)}
-    }
+    },
+    competencyJustifications:cjCollect()
   }]};
 
   const btn=document.getElementById("submitBtn");
@@ -3018,6 +3119,7 @@ async function submitForm(){
     if(typeof PART_ORDER!=="undefined") openOnly(PART_ORDER[0]);
     _applyPrefill();
     var hadDraft=restoreDraft();
+    try{ (COMP_META&&COMP_META.keys?COMP_META.keys:[]).forEach(cjSync); }catch(e){}
     updateProgress();
     updateScore();   // paint the preview immediately — shows N/A for a section with nothing to rate
     if(typeof autoAdvance==="function") autoAdvance();
@@ -3451,10 +3553,56 @@ const ASSESS_WEIGHTS=[
 // The last document built, so the download button doesn't have to rebuild it.
 let _asmDoc=null;
 
-function _asmSecAvg(sec,key){
+const _PROF_RANK=l=>({Foundation:1,Basic:2,Intermediate:3,Advanced:4,Excellent:5}[l]||0);
+const _COMP_LVL_MAP={1:"Foundation",2:"Basic",3:"Intermediate",4:"Advanced",5:"Excellent"};
+// Competencies are rated on a proficiency ladder, but the required level moves
+// with seniority: Basic is the bar for an Associate and a shortfall for a Lead.
+// Feeding the raw ladder value into the score therefore punished juniors for
+// being exactly where they should be — an Associate meeting every requirement
+// averaged 2.0 ("Partially Meets") while a Lead meeting every requirement
+// averaged 4.0. What matters is the GAP to the bar, so that is what we score.
+//
+//   two or more levels above required -> 5  Outstanding
+//   one level above required          -> 4  Exceeds Expectations
+//   exactly at required               -> 3  Meets Expectations
+//   one level below required          -> 2  Partially Meets
+//   two or more levels below required -> 1  Did Not Meet
+//
+// Returns null when the competency cannot be judged — no required level on
+// file, or "Not Demonstrated Yet" — and null values are left out of the
+// average rather than counted as zero.
+function compScoreFor(val,target){
+  if(val===null||val===undefined||val==="") return null;
+  if(val==="nd"||val==="ND"||val==="Not Demonstrated Yet") return null;
+  const a=_PROF_RANK(_COMP_LVL_MAP[parseInt(val)]||"");
+  const t=_PROF_RANK(target||"");
+  if(!a||!t) return null;
+  const gap=a-t;
+  if(gap>=2) return 5;
+  if(gap===1) return 4;
+  if(gap===0) return 3;
+  if(gap===-1) return 2;
+  return 1;
+}
+const _COMP_VERDICT={5:"Outstanding",4:"Exceeds Expectations",3:"Meets Expectations",2:"Partially Meets",1:"Did Not Meet"};
+function _asmSecAvg(sec,key,emp){
   const r=(sec&&sec[key]&&sec[key].ratings)||[];
-  const v=r.map(x=>parseFloat(x)).filter(x=>!isNaN(x));
-  return v.length? v.reduce((s,x)=>s+x,0)/v.length : null;
+  if(!r.length) return null;
+  let vals;
+  if(key==="roleEffectiveness" && emp){
+    // Role Effectiveness holds the performance objectives first, then the
+    // competencies. Only the objectives are already on the 1-5 scale.
+    const nPO=(emp.performanceObjectives||[]).length;
+    const cs=competenciesForEmp(emp), list=(cs&&cs.list)||[];
+    vals=[];
+    r.forEach((v,i)=>{
+      if(i<nPO){ const x=parseFloat(v); if(!isNaN(x)) vals.push(x); }
+      else{ const c=list[i-nPO]; const sc=c?compScoreFor(v,c.target):null; if(sc!==null) vals.push(sc); }
+    });
+  } else {
+    vals=r.map(x=>parseFloat(x)).filter(x=>!isNaN(x));
+  }
+  return vals.length? vals.reduce((s,x)=>s+x,0)/vals.length : null;
 }
 
 function openAssessmentView(empId,period){
@@ -3496,7 +3644,7 @@ function openAssessmentView(empId,period){
     `<div class="va-note">Question-by-question answers aren't stored for this assessment. They appear automatically once your Excel table has a <strong>RatingsDetail</strong> column (managers' forms already send it). The score, recommendation and comments below are always available.</div>`;
 
   /* ── 1. Score Breakdown (Weighted) ── */
-  const rowsW=ASSESS_WEIGHTS.map(x=>Object.assign({},x,{val:_asmSecAvg(sec,x.key)}));
+  const rowsW=ASSESS_WEIGHTS.map(x=>Object.assign({},x,{val:_asmSecAvg(sec,x.key,emp)}));
   const live=rowsW.filter(x=>x.val!==null);
   const totalW=live.reduce((t,x)=>t+x.w,0);
   const breakdown = live.length ? `
@@ -3541,16 +3689,37 @@ function openAssessmentView(empId,period){
     : `<tr><td colspan="3" style="color:var(--ink4)">No performance objectives were defined for this employee.</td></tr>`;
 
   /* ── 4b. Technical competencies (stored after the POs in the same array) ── */
+  const _COMP_LVL={2:"Basic",3:"Intermediate",4:"Advanced",5:"Excellent",1:"Foundation"};
+  const compMeaning=v=>{
+    if(v==="nd"||v==="ND"||v==="Not Demonstrated Yet") return "Not Demonstrated Yet";
+    const k=parseInt(v);
+    return _COMP_LVL[k]||"Not rated";
+  };
   const compSet = is180 ? competenciesForEmp(emp) : null;
   const compRows = (compSet && compSet.list.length)
-    ? compSet.list.map((c,i)=>[c.name, c.target||"\u2014", meaning(reR[pos.length+i])])
+    ? compSet.list.map((c,i)=>{
+        const raw=reR[pos.length+i];
+        const lvl=compMeaning(raw);
+        const sc=compScoreFor(raw,c.target);
+        const verdict = sc!==null ? (sc+" \u2014 "+_COMP_VERDICT[sc])
+                      : (lvl==="Not Demonstrated Yet" ? "Not demonstrated \u2014 not scored"
+                      : (!c.target ? "No required level \u2014 not scored" : "Not rated"));
+        const just=((sec.competencyJustifications||a.competencyJustifications||{})[c.name])||"";
+        return [c.name, c.target||"\u2014", lvl, verdict, sc, just];
+      })
     : [];
   const compHtml = compRows.length ? `
     <div class="va-secttl">Technical Competencies${compSet.practice?" &mdash; "+esc(compSet.practice):""}${compSet.designation?" &middot; "+esc(compSet.designation):""}</div>
-    <table class="va-tbl"><thead><tr><th>Competency</th><th style="width:120px">Required</th><th style="width:150px">Rated</th></tr></thead><tbody>${
-      compRows.map(r=>`<tr><td class="va-area">${esc(r[0])}</td><td style="color:var(--ink3)">${esc(r[1])}</td><td class="va-r">${r[2]}</td></tr>`).join("")
+    <table class="va-tbl"><thead><tr><th>Competency</th><th style="width:115px">Required</th><th style="width:115px">Rated</th><th style="width:185px">Scored as</th></tr></thead><tbody>${
+      compRows.map(r=>{
+        const col = r[4]===null ? "var(--ink4)" : (r[4]>=4?"#059669":(r[4]===3?"#0d4f3c":"#b45309"));
+        const just = r[5] ? `<div style="margin-top:5px;font-size:11.5px;color:#475569;font-weight:400;font-style:italic;white-space:pre-wrap">&ldquo;${esc(r[5])}&rdquo;</div>` : "";
+        return `<tr><td class="va-area">${esc(r[0])}</td><td style="color:var(--ink3)">${esc(r[1])}</td>`
+          +`<td style="font-weight:600">${esc(r[2])}</td>`
+          +`<td class="va-r" style="color:${col}">${esc(r[3])}${just}</td></tr>`;
+      }).join("")
     }</tbody></table>
-    <div class="va-note" style="background:#f8fafc;border-color:#e2e8f0;color:#64748b">These average into Role Effectiveness alongside the performance objectives rather than carrying a weight of their own.</div>` : "";
+    <div class="va-note" style="background:#f8fafc;border-color:#e2e8f0;color:#64748b">Competencies are scored against the level required for this designation, not on the ladder position alone: at required = 3 (Meets), one level above = 4, two or more above = 5, one below = 2, two or more below = 1. Those scores average into Role Effectiveness alongside the performance objectives. Anything shown as not scored is left out of the average entirely.</div>` : "";
 
   /* ── 5. Part 2 ── */
   const p2 = ASSESS_SECTIONS.map(s=>{
@@ -3627,7 +3796,7 @@ function openAssessmentView(empId,period){
       part1: pos.length
         ? pos.map((po,i)=>[po.subCategory||("Performance Objective "+(i+1)), po.objective||po.subCategory||"", plain(reR[i])])
         : [["\u2014","No performance objectives were defined for this employee.",""]],
-      competencies: compRows,
+      competencies: compRows.map(r=>[r[0],r[1],r[2],r[3]+(r[5]?"\n\u201c"+r[5]+"\u201d":"")]),
       compPractice: compSet ? (compSet.practice||"") : "",
       compDesignation: compSet ? (compSet.designation||"") : "",
       part2: ASSESS_SECTIONS.map(x=>({cat:x.cat, rows:x.areas.map((ar,i)=>[ar.area, ar.q, plain(((sec[x.key]&&sec[x.key].ratings)||[])[i])])})),
@@ -3826,8 +3995,8 @@ function buildAssessmentPdf(){
       +(x.compPractice?" \u2014 "+x.compPractice:"")
       +(x.compDesignation?" \u00b7 "+x.compDesignation:""), y);
     doc.autoTable(_pdfTableOpts({
-      startY:y, head:[["Competency","Required","Rated"]], body:x.competencies,
-      columnStyles:{1:{cellWidth:90,textColor:_PDF_MUT},2:{cellWidth:112,fontStyle:"bold",textColor:_PDF_G}}
+      startY:y, head:[["Competency","Required","Rated","Scored as"]], body:x.competencies,
+      columnStyles:{1:{cellWidth:78,textColor:_PDF_MUT},2:{cellWidth:78},3:{cellWidth:132,fontStyle:"bold",textColor:_PDF_G}}
     }));
     y=doc.lastAutoTable.finalY+16;
   }
@@ -4488,10 +4657,9 @@ function _asmFor(empId,want180){
 // Section average from the per-question answers the form sends back. Returns
 // null (not 0) when the section wasn't captured, so it can be shown as "—"
 // instead of dragging an average down.
-function _secAvg(a,key){
+function _secAvg(a,key,emp){
   if(!a||!a.sections||!a.sections[key]) return null;
-  const v=(a.sections[key].ratings||[]).map(x=>parseFloat(x)).filter(x=>!isNaN(x));
-  return v.length? v.reduce((s,x)=>s+x,0)/v.length : null;
+  return _asmSecAvg(a.sections,key,emp);
 }
 function _cmpPairs(){
   return EMPS.map(e=>{
@@ -4539,8 +4707,8 @@ function renderComparison(){
   const declined=pairs.filter(p=>p.delta<=-0.05).length;
   const steady=pairs.length-improved-declined;
   const secRows=CMP_SECTIONS.map(s=>{
-    const v90=pairs.map(p=>_secAvg(p.a90,s.k)).filter(x=>x!==null);
-    const v180=pairs.map(p=>_secAvg(p.a180,s.k)).filter(x=>x!==null);
+    const v90=pairs.map(p=>_secAvg(p.a90,s.k,p.emp)).filter(x=>x!==null);
+    const v180=pairs.map(p=>_secAvg(p.a180,s.k,p.emp)).filter(x=>x!==null);
     const m90=v90.length?avg(v90):null, m180=v180.length?avg(v180):null;
     return {l:s.l,m90,m180,d:(m90!==null&&m180!==null)?m180-m90:null,n:Math.min(v90.length,v180.length)};
   });
@@ -4629,7 +4797,7 @@ function renderComparison(){
         + '<td style="text-align:center"><strong>'+p.s90.toFixed(2)+'</strong><div><span class="bdg '+r90.c+'" style="font-size:9.5px">'+r90.l+'</span></div></td>'
         + '<td style="text-align:center"><strong>'+p.s180.toFixed(2)+'</strong><div><span class="bdg '+r180.c+'" style="font-size:9.5px">'+r180.l+'</span></div></td>'
         + '<td style="text-align:center">'+_dl(p.delta)+'</td>'
-        + CMP_SECTIONS.map(s=>{const a=_secAvg(p.a90,s.k),b=_secAvg(p.a180,s.k);return '<td style="text-align:center;font-size:12px">'+((a!==null&&b!==null)?_dl(b-a):'<span style="color:#cbd5e1">&mdash;</span>')+'</td>';}).join("")
+        + CMP_SECTIONS.map(s=>{const a=_secAvg(p.a90,s.k,p.emp),b=_secAvg(p.a180,s.k,p.emp);return '<td style="text-align:center;font-size:12px">'+((a!==null&&b!==null)?_dl(b-a):'<span style="color:#cbd5e1">&mdash;</span>')+'</td>';}).join("")
         + '<td style="color:#64748b;font-size:12px">'+escH(p.a180.overallRecommendation||"-")+'</td>'
         + '</tr>';
       }).join("")
@@ -4649,7 +4817,7 @@ function _cmpDetail(p){
     + '</div>';
   const secTable='<div class="tw" style="margin-top:16px"><table><thead><tr><th>Section</th><th style="text-align:center">90-Day</th><th style="text-align:center">180-Day</th><th style="text-align:center">Change</th></tr></thead><tbody>'
     + CMP_SECTIONS.map(s=>{
-        const a=_secAvg(p.a90,s.k), b=_secAvg(p.a180,s.k);
+        const a=_secAvg(p.a90,s.k,p.emp), b=_secAvg(p.a180,s.k,p.emp);
         return '<tr><td><strong>'+escH(s.l)+'</strong></td><td style="text-align:center">'+_n2(a)+'</td><td style="text-align:center">'+_n2(b)+'</td><td style="text-align:center">'+((a!==null&&b!==null)?_dl(b-a):'<span style="color:#cbd5e1">&mdash;</span>')+'</td></tr>';
       }).join("")
     + '<tr style="background:#f8fafc"><td><strong>Overall QOH Score</strong></td><td style="text-align:center"><strong>'+p.s90.toFixed(2)+'</strong></td><td style="text-align:center"><strong>'+p.s180.toFixed(2)+'</strong></td><td style="text-align:center">'+_dl(p.delta)+'</td></tr>'
@@ -4689,7 +4857,7 @@ function exportComparison(){
       "Change":parseFloat(p.delta.toFixed(2)),
       "Direction":p.delta>=0.05?"Improved":(p.delta<=-0.05?"Declined":"Steady")};
     CMP_SECTIONS.forEach(s=>{
-      const a=_secAvg(p.a90,s.k), b=_secAvg(p.a180,s.k);
+      const a=_secAvg(p.a90,s.k,p.emp), b=_secAvg(p.a180,s.k,p.emp);
       r[s.l+" (90)"]=a===null?"":parseFloat(a.toFixed(2));
       r[s.l+" (180)"]=b===null?"":parseFloat(b.toFixed(2));
       r[s.l+" Change"]=(a===null||b===null)?"":parseFloat((b-a).toFixed(2));
