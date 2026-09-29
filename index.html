@@ -893,6 +893,11 @@ function _cleanEmail(v){
 function _validEmail(v){
   return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(_cleanEmail(v));
 }
+function _parseCompRatings(v){
+  if(!v) return {};
+  if(typeof v==="object") return v;
+  try{ var o=JSON.parse(String(v)); return (o&&typeof o==="object")?o:{}; }catch(e){ return {}; }
+}
 function rowToEmp(r){
   const e={
     id:String(_pick(r,["EmployeeId","employeeId","Employee ID","id"])),
@@ -910,7 +915,10 @@ function rowToEmp(r){
     hiringSource:String(_pick(r,["HiringSource","hiringSource","Hiring Source"])),
     // Competency mapping (blank = auto-detect from department / designation)
     practice:String(_pick(r,["Practice","practice","CompetencyFunction","Competency Function"])),
-    compDesignation:String(_pick(r,["CompetencyDesignation","compDesignation","Competency Designation"]))
+    compDesignation:String(_pick(r,["CompetencyDesignation","compDesignation","Competency Designation"])),
+    // HR-set competency ratings, keyed by competency NAME so they survive the
+    // framework being re-ordered. Stored as JSON in one column.
+    compRatings:_parseCompRatings(_pick(r,["CompetencyRatings","compRatings","Competency Ratings"]))
   };
   // Project details: prefer a JSON column, else fall back to discrete first-project columns
   let projects=[];
@@ -989,7 +997,7 @@ function rowToAsm(r){
 function empToRow(e){
   const pjs=Array.isArray(e.projects)?e.projects:[];
   const p0=pjs[0]||{};
-  return {EmployeeId:e.id,Name:e.name,Email:e.email||"",Department:e.department||"",Designation:e.designation||"",DOJ:e.doj||"",Manager:e.manager||"",ManagerEmail:e.managerEmail||"",Mentor:e.mentor||"",Location:e.location||"",EmploymentType:e.employmentType||"Full-time",Recruiter:e.recruiter||"",HiringSource:e.hiringSource||"",Practice:e.practice||"",CompetencyDesignation:e.compDesignation||"",Project:p0.name||"",StartDate:p0.start||"",EndDate:p0.end||"",PM:p0.pm||"",DD:p0.dd||"",Allocation:p0.allocation||"",POs:JSON.stringify(e.performanceObjectives||[]),ProjectDetails:JSON.stringify(pjs)};
+  return {EmployeeId:e.id,Name:e.name,Email:e.email||"",Department:e.department||"",Designation:e.designation||"",DOJ:e.doj||"",Manager:e.manager||"",ManagerEmail:e.managerEmail||"",Mentor:e.mentor||"",Location:e.location||"",EmploymentType:e.employmentType||"Full-time",Recruiter:e.recruiter||"",HiringSource:e.hiringSource||"",Practice:e.practice||"",CompetencyDesignation:e.compDesignation||"",CompetencyRatings:JSON.stringify(e.compRatings||{}),Project:p0.name||"",StartDate:p0.start||"",EndDate:p0.end||"",PM:p0.pm||"",DD:p0.dd||"",Allocation:p0.allocation||"",POs:JSON.stringify(e.performanceObjectives||[]),ProjectDetails:JSON.stringify(pjs)};
 }
 
 // ── Top banner used for backend status (config missing / fetch failed) ───────
@@ -2098,6 +2106,19 @@ function buildEmployeeForm(emp, period){
   // competencies, averaged together into the same 40% weight.
   const _compForKeys = _is180 ? competenciesForEmp(emp) : null;
   const _compKeys = _compForKeys ? _compForKeys.list.map(c=>"cp_"+c.i) : [];
+  // HR may have rated some competencies already. Resolve those names to the
+  // form's own keys and values here, where _PROF_V is in scope, so the form
+  // just has to apply them.
+  const _prefill = {};
+  if(_compForKeys && emp && emp.compRatings){
+    _compForKeys.list.forEach(function(c){
+      const lvl=emp.compRatings[c.name];
+      if(!lvl) return;
+      const v=(lvl==="nd")?"nd":_PROF_V[lvl];
+      if(v===undefined||v===null) return;
+      _prefill["cp_"+c.i]={v:String(v),lvl:lvl};
+    });
+  }
   const reKeys = [...(pos.length ? pos.map((_,i)=>"re_"+i) : []), ..._compKeys];
   const _compInfo = _compForKeys ? _compForKeys.list.map(c=>({name:c.name,desc:c.desc||"",levels:c.levels||null,target:c.target||"",designation:_compForKeys.designation||""})) : [];
   const _compMeta = _compForKeys ? {practice:_compForKeys.practice, designation:_compForKeys.designation||"", keys:_compForKeys.list.map(c=>"cp_"+c.i), names:_compForKeys.list.map(c=>c.name), targets:_compForKeys.list.map(c=>c.target)} : null;
@@ -2471,6 +2492,23 @@ tr.needs-input td{background:#fef2f2 !important}
 </div><!-- end .page -->
 
 <script>
+const COMP_PREFILL = ${JSON.stringify(_prefill)};
+// Ratings HR set before sending. Applied through the normal selection path so
+// the form behaves exactly as if the manager had clicked them, and applied
+// BEFORE any draft restores, so the manager's own work always wins.
+var _prefilling=false;
+function _applyPrefill(){
+  _prefilling=true;
+  try{
+    Object.keys(COMP_PREFILL||{}).forEach(function(k){
+      const pre=COMP_PREFILL[k];
+      if(!pre||!document.getElementById("rw_"+k)) return;
+      segPick(k,pre.v,pre.lvl);
+    });
+  }catch(e){}
+  _prefilling=false;
+}
+
 // ── Sign-off email helpers ──────────────────────
 function _cleanEmail(v){
   var t=String(v==null?"":v).replace(/\u00a0/g," ").trim();
@@ -2584,7 +2622,7 @@ var DONE_KEY ="qohdone_${escJS(emp.id)}_${period}";
 var _submitted=false;
 function _fields(){ return document.querySelectorAll("select[name],textarea,input.af-in,#conf_months,#conf_reason,#af_name,#af_email"); }
 function saveDraft(){
-  if(_submitted) return;
+  if(_submitted||_prefilling) return;
   try{
     var d={};
     _fields().forEach(function(el){
@@ -2978,6 +3016,7 @@ async function submitForm(){
     checkAlreadySubmitted();
     // Start with only the first section open.
     if(typeof PART_ORDER!=="undefined") openOnly(PART_ORDER[0]);
+    _applyPrefill();
     var hadDraft=restoreDraft();
     updateProgress();
     updateScore();   // paint the preview immediately — shows N/A for a section with nothing to rate
@@ -3501,6 +3540,18 @@ function openAssessmentView(empId,period){
     ? pos.map((po,i)=>`<tr><td class="va-area">${esc(po.subCategory||("Performance Objective "+(i+1)))}</td><td class="va-q">${esc(po.objective||po.subCategory||"")}</td><td class="va-r">${meaning(reR[i])}</td></tr>`).join("")
     : `<tr><td colspan="3" style="color:var(--ink4)">No performance objectives were defined for this employee.</td></tr>`;
 
+  /* ── 4b. Technical competencies (stored after the POs in the same array) ── */
+  const compSet = is180 ? competenciesForEmp(emp) : null;
+  const compRows = (compSet && compSet.list.length)
+    ? compSet.list.map((c,i)=>[c.name, c.target||"\u2014", meaning(reR[pos.length+i])])
+    : [];
+  const compHtml = compRows.length ? `
+    <div class="va-secttl">Technical Competencies${compSet.practice?" &mdash; "+esc(compSet.practice):""}${compSet.designation?" &middot; "+esc(compSet.designation):""}</div>
+    <table class="va-tbl"><thead><tr><th>Competency</th><th style="width:120px">Required</th><th style="width:150px">Rated</th></tr></thead><tbody>${
+      compRows.map(r=>`<tr><td class="va-area">${esc(r[0])}</td><td style="color:var(--ink3)">${esc(r[1])}</td><td class="va-r">${r[2]}</td></tr>`).join("")
+    }</tbody></table>
+    <div class="va-note" style="background:#f8fafc;border-color:#e2e8f0;color:#64748b">These average into Role Effectiveness alongside the performance objectives rather than carrying a weight of their own.</div>` : "";
+
   /* ── 5. Part 2 ── */
   const p2 = ASSESS_SECTIONS.map(s=>{
     const rr=(sec[s.key]&&sec[s.key].ratings)||[];
@@ -3536,8 +3587,9 @@ function openAssessmentView(empId,period){
 
   const doc = meta + note + breakdown + ratingScale + projHtml
     + `<div class="va-secttl"><span class="part-num2">1</span> Role Effectiveness</div>
-    <table class="va-tbl"><thead><tr><th>Assessment Area</th><th>Objective</th><th style="width:150px">Rating</th></tr></thead><tbody>${p1}</tbody></table>
-    <div class="va-secttl"><span class="part-num2">2</span> Manager Assessment</div>
+    <table class="va-tbl"><thead><tr><th>Assessment Area</th><th>Objective</th><th style="width:150px">Rating</th></tr></thead><tbody>${p1}</tbody></table>`
+    + compHtml
+    + `<div class="va-secttl"><span class="part-num2">2</span> Manager Assessment</div>
     <table class="va-tbl"><thead><tr><th>Assessment Area</th><th>Question</th><th style="width:150px">Rating</th></tr></thead><tbody>${p2}</tbody></table>`
     + recScale
     + `<div class="va-secttl"><span class="part-num2">3</span> Overall Recommendation</div>
@@ -3575,6 +3627,9 @@ function openAssessmentView(empId,period){
       part1: pos.length
         ? pos.map((po,i)=>[po.subCategory||("Performance Objective "+(i+1)), po.objective||po.subCategory||"", plain(reR[i])])
         : [["\u2014","No performance objectives were defined for this employee.",""]],
+      competencies: compRows,
+      compPractice: compSet ? (compSet.practice||"") : "",
+      compDesignation: compSet ? (compSet.designation||"") : "",
       part2: ASSESS_SECTIONS.map(x=>({cat:x.cat, rows:x.areas.map((ar,i)=>[ar.area, ar.q, plain(((sec[x.key]&&sec[x.key].ratings)||[])[i])])})),
       recScale: ASSESS_RECS.slice().reverse().map((l,i)=>[String(ASSESS_RECS.length-i), l]),
       part3: p3data,
@@ -3764,6 +3819,18 @@ function buildAssessmentPdf(){
     columnStyles:{0:{cellWidth:120,fontStyle:"bold"},2:{cellWidth:112,fontStyle:"bold",textColor:_PDF_G}}
   }));
   y=doc.lastAutoTable.finalY+16;
+
+  /* 4b. Technical competencies */
+  if(x.competencies && x.competencies.length){
+    y=_pdfHeading(doc,"Technical Competencies"
+      +(x.compPractice?" \u2014 "+x.compPractice:"")
+      +(x.compDesignation?" \u00b7 "+x.compDesignation:""), y);
+    doc.autoTable(_pdfTableOpts({
+      startY:y, head:[["Competency","Required","Rated"]], body:x.competencies,
+      columnStyles:{1:{cellWidth:90,textColor:_PDF_MUT},2:{cellWidth:112,fontStyle:"bold",textColor:_PDF_G}}
+    }));
+    y=doc.lastAutoTable.finalY+16;
+  }
 
   /* 5. Part 2 */
   y=_pdfHeading(doc,"Manager Assessment",y,2);
@@ -6128,6 +6195,22 @@ function openEmpModal(empId){
         </div>
       </div>
       <div id="efCompHint" style="margin-top:10px;font-size:12px;color:#64748b"></div>
+
+      <!-- Optional: HR rates some competencies up front. Whatever is set here
+           arrives already selected in the manager's 180-Day form, and counts as
+           the real rating unless the manager changes it. -->
+      <div style="margin-top:12px;border-top:1px solid #e2e8f0;padding-top:11px">
+        <button type="button" onclick="toggleCompPrefill()" id="efPreToggle"
+          style="background:none;border:none;padding:0;cursor:pointer;font-family:inherit;font-size:12px;font-weight:700;color:#0d4f3c;display:flex;align-items:center;gap:6px">
+          <span id="efPreCx" style="font-size:9px">&#9654;</span> Pre-fill competency ratings
+          <span id="efPreCount" style="font-weight:600;color:#94a3b8"></span>
+        </button>
+        <div id="efPreBox" style="display:none;margin-top:10px">
+          <div style="font-size:11.5px;color:#94a3b8;margin-bottom:9px;line-height:1.5">Leave a competency blank to let the manager rate it from scratch. Anything you set here appears pre-selected in their form.</div>
+          <div id="efPreList" style="max-height:290px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;background:#fff"></div>
+          <button type="button" onclick="clearCompPrefill()" style="margin-top:8px;background:none;border:none;padding:0;cursor:pointer;font-family:inherit;font-size:11.5px;color:#64748b;text-decoration:underline">Clear all pre-filled ratings</button>
+        </div>
+      </div>
     </div>
 
     <div style="margin-bottom:18px">
@@ -6155,8 +6238,10 @@ function openEmpModal(empId){
   const _seed=(emp&&Array.isArray(emp.projects))?emp.projects:[];
   if(_seed.length) _seed.forEach(p=>addEmpProjRow(p)); else addEmpProjRow();
 
+  _preSeed=Object.assign({}, (emp&&emp.compRatings)||{});
   _fillCompDesigSelect(_selD);
   onEmpPracticeChange(true);
+  _fillCompPrefill();
   // Department / designation feed auto-detection, so re-evaluate as they change.
   ["ef_department","ef_designation"].forEach(id=>{
     const el=document.getElementById(id);
@@ -6184,8 +6269,58 @@ function _fillCompDesigSelect(keep){
 }
 
 // Live preview of what the 180-Day form will actually ask for this person.
+const _PRE_LEVELS=["Basic","Intermediate","Advanced","Excellent"];
+let _preSeed={};
+function toggleCompPrefill(){
+  const b=document.getElementById("efPreBox"), c=document.getElementById("efPreCx");
+  if(!b) return;
+  const open=b.style.display==="none";
+  b.style.display=open?"block":"none";
+  if(c) c.innerHTML=open?"&#9660;":"&#9654;";
+}
+// Rebuilt whenever the function or designation changes, because that changes
+// which competencies apply — a rating for a competency that no longer applies
+// would be silently carried around forever.
+function _fillCompPrefill(){
+  const box=document.getElementById("efPreList"); if(!box) return;
+  const ps=document.getElementById("ef_practice"), ds=document.getElementById("ef_compDesignation");
+  const probe={department:(document.getElementById("ef_department")||{}).value||"",
+               designation:(document.getElementById("ef_designation")||{}).value||"",
+               practice:ps?ps.value:"", compDesignation:ds?ds.value:""};
+  const c=competenciesForEmp(probe);
+  if(!c||!c.list.length){
+    box.innerHTML='<div style="padding:14px;font-size:12px;color:#94a3b8">No competencies resolve for this employee yet.</div>';
+    _updatePreCount(); return;
+  }
+  box.innerHTML=c.list.map(function(x,i){
+    const cur=_preSeed[x.name]||"";
+    const opts=['<option value="">Not set</option>']
+      .concat(_PRE_LEVELS.map(function(l){ return '<option value="'+escH(l)+'"'+(cur===l?" selected":"")+'>'+escH(l)+(x.target===l?" (required)":"")+'</option>'; }))
+      .concat(['<option value="nd"'+(cur==="nd"?" selected":"")+'>Not Demonstrated Yet</option>']).join("");
+    return '<div style="display:flex;align-items:center;gap:10px;padding:7px 10px;'+(i?"border-top:1px solid #f1f5f9":"")+'">'
+      +'<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escH(x.name)+'</div>'
+      +(x.target?'<div style="font-size:10.5px;color:#94a3b8">Required: '+escH(x.target)+'</div>':'')+'</div>'
+      +'<select data-pre="'+escH(x.name)+'" onchange="_preSeed[this.dataset.pre]=this.value;_updatePreCount()" style="width:170px;padding:5px 8px;border-radius:7px;border:1.5px solid #e2e8f0;font-size:12px;font-family:inherit;background:#fff">'+opts+'</select>'
+      +'</div>';
+  }).join("");
+  _updatePreCount();
+}
+function _updatePreCount(){
+  const el=document.getElementById("efPreCount"); if(!el) return;
+  const n=Object.keys(_preSeed).filter(function(k){ return !!_preSeed[k]; }).length;
+  el.textContent=n?("\u00b7 "+n+" set"):"";
+}
+function clearCompPrefill(){ _preSeed={}; _fillCompPrefill(); }
+function _collectCompPrefill(){
+  const out={};
+  document.querySelectorAll("[data-pre]").forEach(function(sel){ if(sel.value) out[sel.dataset.pre]=sel.value; });
+  return out;
+}
 function onEmpPracticeChange(skipRefill){
-  if(!skipRefill) _fillCompDesigSelect((document.getElementById("ef_compDesignation")||{}).value||"");
+  if(!skipRefill){
+    _fillCompDesigSelect((document.getElementById("ef_compDesignation")||{}).value||"");
+    _fillCompPrefill();
+  }
   const hint=document.getElementById("efCompHint"); if(!hint) return;
   const ps=document.getElementById("ef_practice"), ds=document.getElementById("ef_compDesignation");
   const probe={department:(document.getElementById("ef_department")||{}).value||"",
@@ -6251,6 +6386,7 @@ function saveEmp(existingId){
     recruiter:get("recruiter"), hiringSource:get("hiringSource"),
     // Competency mapping — blank means "auto-detect", which is the old behaviour.
     practice:get("practice"), compDesignation:get("compDesignation"),
+    compRatings:_collectCompPrefill(),
     projects:collectEmpProjects()
   };
   let finalEmp;
